@@ -142,6 +142,7 @@ fun ChatLogScreen(
             glassModifier = Modifier
                 .fillMaxWidth()
                 .padding(horizontal = sdp(12.dp), vertical = sdp(8.dp)),
+            bottomSpacing = sdp(16.dp),
             background = {
                 error?.let { err ->
                     Card(
@@ -159,7 +160,7 @@ fun ChatLogScreen(
                     modifier = Modifier.fillMaxSize().padding(horizontal = sdp(16.dp)),
                     state = listState,
                     verticalArrangement = Arrangement.spacedBy(sdp(8.dp)),
-                    contentPadding = PaddingValues(top = sdp(8.dp), bottom = sdp(80.dp))
+                    contentPadding = PaddingValues(top = sdp(8.dp), bottom = sdp(96.dp))
                 ) {
                     items(messages, key = { it.id }) { message ->
                         ChatBubble(message = message, modifier = Modifier)
