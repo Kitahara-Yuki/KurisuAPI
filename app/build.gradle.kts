@@ -17,7 +17,7 @@ if (localPropertiesFile.exists()) {
 
 android {
     namespace = "com.kurisuapi"
-    compileSdk = 35
+    compileSdk = 36
 
     defaultConfig {
         applicationId = "com.kurisuapi"
@@ -60,6 +60,10 @@ android {
 
     kotlinOptions {
         jvmTarget = "17"
+    }
+
+    lint {
+        checkReleaseBuilds = false
     }
 
     buildFeatures {
@@ -128,4 +132,7 @@ dependencies {
     // Haze (iOS-style blur)
     implementation(libs.haze)
     implementation(libs.haze.materials)
+
+    // Backdrop (liquid glass)
+    implementation(libs.backdrop)
 }

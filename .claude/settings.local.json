@@ -52,7 +52,8 @@
       "Bash(cp *)",
       "Bash(cp /Users/yuki/Desktop/Android项目/KurisuAPI/app/build/outputs/apk/release/app-release.apk /Users/yuki/Desktop/KurisuAPI-v1.5.4.apk)",
       "Bash(git add *)",
-      "Bash(git commit *)"
+      "Bash(git commit *)",
+      "Bash(./gradlew assembleRelease --stacktrace)"
     ]
   }
 }
