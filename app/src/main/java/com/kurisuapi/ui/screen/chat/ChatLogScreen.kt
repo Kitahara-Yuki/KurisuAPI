@@ -1,17 +1,9 @@
 package com.kurisuapi.ui.screen.chat
 
-import androidx.compose.animation.core.LinearEasing
-import androidx.compose.animation.core.RepeatMode
-import androidx.compose.animation.core.animateFloat
-import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.rememberInfiniteTransition
-import androidx.compose.animation.core.tween
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -25,11 +17,8 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.drawBehind
-import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
@@ -38,13 +27,11 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.kurisuapi.data.entity.ChatHistoryEntity
 import com.kurisuapi.ui.component.ChatBubble
+import com.kurisuapi.ui.component.FrostedGlassSurface
 import com.kurisuapi.ui.viewmodel.ContextUsage
 import com.kurisuapi.ui.viewmodel.ChatViewModel
 import com.kurisuapi.util.TokenEstimator
 import dev.chrisbanes.haze.HazeState
-import dev.chrisbanes.haze.HazeStyle
-import dev.chrisbanes.haze.HazeTint
-import dev.chrisbanes.haze.hazeEffect
 import dev.chrisbanes.haze.hazeSource
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
@@ -68,17 +55,6 @@ fun ChatLogScreen(
     var inputText by remember { mutableStateOf("") }
     val listState = rememberLazyListState()
     val hazeState = remember { HazeState() }
-    val darkTheme = isSystemInDarkTheme()
-    // 液态玻璃微光动画
-    val infiniteTransition = rememberInfiniteTransition()
-    val shimmerOffset by infiniteTransition.animateFloat(
-        initialValue = -300f,
-        targetValue = 800f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(3500, easing = LinearEasing),
-            repeatMode = RepeatMode.Restart
-        )
-    )
 
     val isArchived = session?.isArchived == true
     val usage by viewModel.contextUsage.collectAsState()
@@ -214,282 +190,106 @@ fun ChatLogScreen(
                 }
             }
 
-            // iOS 26 液态玻璃样式
-            val glassTintColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.10f)
-            val glassBlurStyle = HazeStyle(
-                blurRadius = 15.dp,
-                tint = HazeTint(glassTintColor),
-                backgroundColor = MaterialTheme.colorScheme.surface,
-                fallbackTint = HazeTint(glassTintColor)
-            )
-            // 预先计算 dp 值（供 drawBehind 非 Composable 上下文使用）
-            val density = androidx.compose.ui.platform.LocalDensity.current
-            val shadowCornerPx = with(density) { sdp(28.dp).toPx() }
-            val shadowOffsetYPx = with(density) { 6.dp.toPx() }
-            val shadowGlowOffsetYPx = with(density) { (-3).dp.toPx() }
-
-            // 前景层：iOS 26 Liquid Glass 胶囊，悬浮在底部
+            // 前景层：毛玻璃胶囊，悬浮在底部
             if (isArchived) {
-                Surface(
+                FrostedGlassSurface(
+                    hazeState = hazeState,
                     modifier = Modifier
                         .fillMaxWidth()
                         .align(Alignment.BottomCenter)
                         .padding(horizontal = sdp(12.dp), vertical = sdp(8.dp))
-                        .drawBehind {
-                            // 棱柱阴影 — 外层彩色投影（模拟玻璃厚度）
-                            drawRoundRect(
-                                color = Color(0x1A007AFF),
-                                topLeft = Offset(0f, shadowOffsetYPx),
-                                size = Size(size.width, size.height),
-                                cornerRadius = CornerRadius(shadowCornerPx)
-                            )
-                            // 底部反光 — 玻璃底边缘的亮光
-                            drawRoundRect(
-                                color = Color(0x0DFFFFFF),
-                                topLeft = Offset(0f, shadowGlowOffsetYPx),
-                                size = Size(size.width, size.height),
-                                cornerRadius = CornerRadius(shadowCornerPx)
-                            )
-                        }
-                        .clip(RoundedCornerShape(sdp(28.dp)))
-                        .hazeEffect(state = hazeState, style = glassBlurStyle),
-                    shape = RoundedCornerShape(sdp(28.dp)),
-                    color = Color.Transparent,
-                    tonalElevation = 0.dp,
-                    shadowElevation = 0.dp,
-                    border = BorderStroke(
-                        0.5.dp,
-                        MaterialTheme.colorScheme.outline
-                    )
                 ) {
-                    Box {
-                        // 第一层：大范围柔光
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(sdp(16.dp))
-                                .align(Alignment.TopCenter)
-                                .background(
-                                    Brush.verticalGradient(
-                                        colors = listOf(
-                                            Color.White.copy(alpha = if (darkTheme) 0.03f else 0.06f),
-                                            Color.Transparent
-                                        )
-                                    ),
-                                    shape = RoundedCornerShape(topStart = sdp(28.dp), topEnd = sdp(28.dp))
-                                )
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = sdp(16.dp), vertical = sdp(12.dp)),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.Center
+                    ) {
+                        Icon(
+                            Icons.Outlined.Lock,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f),
+                            modifier = Modifier.size(sdp(16.dp))
                         )
-                        // 第二层：镜面亮边（极细）
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(sdp(4.dp))
-                                .align(Alignment.TopCenter)
-                                .background(
-                                    Brush.verticalGradient(
-                                        colors = listOf(
-                                            Color.White.copy(alpha = if (darkTheme) 0.12f else 0.25f),
-                                            Color.White.copy(alpha = if (darkTheme) 0.03f else 0.06f),
-                                            Color.Transparent
-                                        )
-                                    ),
-                                    shape = RoundedCornerShape(topStart = sdp(28.dp), topEnd = sdp(28.dp))
-                                )
+                        Spacer(modifier = Modifier.width(sdp(6.dp)))
+                        Text(
+                            "对话已归档，不能发送消息",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f)
                         )
-                        // 第三层：微光动画（shimmer）
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(sdp(24.dp))
-                                .align(Alignment.TopCenter)
-                                .background(
-                                    Brush.horizontalGradient(
-                                        colors = listOf(
-                                            Color.Transparent,
-                                            Color.Transparent,
-                                            Color.White.copy(alpha = if (darkTheme) 0.04f else 0.07f),
-                                            Color.Transparent,
-                                            Color.Transparent
-                                        ),
-                                        startX = shimmerOffset - 150f,
-                                        endX = shimmerOffset + 150f
-                                    ),
-                                    shape = RoundedCornerShape(topStart = sdp(28.dp), topEnd = sdp(28.dp))
-                                )
-                        )
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(horizontal = sdp(16.dp), vertical = sdp(12.dp)),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.Center
-                        ) {
-                            Icon(
-                                Icons.Outlined.Lock,
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f),
-                                modifier = Modifier.size(sdp(16.dp))
-                            )
-                            Spacer(modifier = Modifier.width(sdp(6.dp)))
-                            Text(
-                                "对话已归档，不能发送消息",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f)
-                            )
-                        }
                     }
                 }
             } else {
-                Surface(
+                FrostedGlassSurface(
+                    hazeState = hazeState,
                     modifier = Modifier
                         .fillMaxWidth()
                         .align(Alignment.BottomCenter)
                         .padding(horizontal = sdp(12.dp), vertical = sdp(8.dp))
-                        .drawBehind {
-                            // 棱柱阴影 — 外层彩色投影（模拟玻璃厚度）
-                            drawRoundRect(
-                                color = Color(0x1A007AFF),
-                                topLeft = Offset(0f, shadowOffsetYPx),
-                                size = Size(size.width, size.height),
-                                cornerRadius = CornerRadius(shadowCornerPx)
-                            )
-                            // 底部反光 — 玻璃底边缘的亮光
-                            drawRoundRect(
-                                color = Color(0x0DFFFFFF),
-                                topLeft = Offset(0f, shadowGlowOffsetYPx),
-                                size = Size(size.width, size.height),
-                                cornerRadius = CornerRadius(shadowCornerPx)
-                            )
-                        }
-                        .clip(RoundedCornerShape(sdp(28.dp)))
-                        .hazeEffect(state = hazeState, style = glassBlurStyle),
-                    shape = RoundedCornerShape(sdp(28.dp)),
-                    color = Color.Transparent,
-                    tonalElevation = 0.dp,
-                    shadowElevation = 0.dp,
-                    border = BorderStroke(
-                        0.5.dp,
-                        MaterialTheme.colorScheme.outline
-                    )
                 ) {
-                    Box {
-                        // 第一层：大范围柔光
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(sdp(16.dp))
-                                .align(Alignment.TopCenter)
-                                .background(
-                                    Brush.verticalGradient(
-                                        colors = listOf(
-                                            Color.White.copy(alpha = if (darkTheme) 0.03f else 0.06f),
-                                            Color.Transparent
-                                        )
-                                    ),
-                                    shape = RoundedCornerShape(topStart = sdp(28.dp), topEnd = sdp(28.dp))
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = sdp(12.dp), vertical = sdp(4.dp)),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        OutlinedTextField(
+                            value = inputText,
+                            onValueChange = { inputText = it },
+                            modifier = Modifier.weight(1f),
+                            placeholder = {
+                                Text(
+                                    "输入消息...",
+                                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f)
                                 )
-                        )
-                        // 第二层：镜面亮边（极细）
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(sdp(4.dp))
-                                .align(Alignment.TopCenter)
-                                .background(
-                                    Brush.verticalGradient(
-                                        colors = listOf(
-                                            Color.White.copy(alpha = if (darkTheme) 0.12f else 0.25f),
-                                            Color.White.copy(alpha = if (darkTheme) 0.03f else 0.06f),
-                                            Color.Transparent
-                                        )
-                                    ),
-                                    shape = RoundedCornerShape(topStart = sdp(28.dp), topEnd = sdp(28.dp))
-                                )
-                        )
-                        // 第三层：微光动画（shimmer）
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(sdp(24.dp))
-                                .align(Alignment.TopCenter)
-                                .background(
-                                    Brush.horizontalGradient(
-                                        colors = listOf(
-                                            Color.Transparent,
-                                            Color.Transparent,
-                                            Color.White.copy(alpha = if (darkTheme) 0.04f else 0.07f),
-                                            Color.Transparent,
-                                            Color.Transparent
-                                        ),
-                                        startX = shimmerOffset - 150f,
-                                        endX = shimmerOffset + 150f
-                                    ),
-                                    shape = RoundedCornerShape(topStart = sdp(28.dp), topEnd = sdp(28.dp))
-                                )
-                        )
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(horizontal = sdp(12.dp), vertical = sdp(4.dp)),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            OutlinedTextField(
-                                value = inputText,
-                                onValueChange = { inputText = it },
-                                modifier = Modifier.weight(1f),
-                                placeholder = {
-                                    Text(
-                                        "输入消息...",
-                                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f)
-                                    )
-                                },
-                                maxLines = 3,
-                                enabled = !isLoading,
-                                textStyle = MaterialTheme.typography.bodyMedium.copy(
-                                    color = MaterialTheme.colorScheme.onSurface
-                                ),
-                                colors = OutlinedTextFieldDefaults.colors(
-                                    focusedBorderColor = Color.Transparent,
-                                    unfocusedBorderColor = Color.Transparent,
-                                    disabledBorderColor = Color.Transparent,
-                                    focusedContainerColor = Color.Transparent,
-                                    unfocusedContainerColor = Color.Transparent,
-                                    disabledContainerColor = Color.Transparent,
-                                    cursorColor = MaterialTheme.colorScheme.primary
-                                )
+                            },
+                            maxLines = 3,
+                            enabled = !isLoading,
+                            textStyle = MaterialTheme.typography.bodyMedium.copy(
+                                color = MaterialTheme.colorScheme.onSurface
+                            ),
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedBorderColor = Color.Transparent,
+                                unfocusedBorderColor = Color.Transparent,
+                                disabledBorderColor = Color.Transparent,
+                                focusedContainerColor = Color.Transparent,
+                                unfocusedContainerColor = Color.Transparent,
+                                disabledContainerColor = Color.Transparent,
+                                cursorColor = MaterialTheme.colorScheme.primary
                             )
-                            Spacer(modifier = Modifier.width(sdp(8.dp)))
-                            Box(
-                                modifier = Modifier
-                                    .size(sdp(36.dp))
-                                    .clip(CircleShape)
-                                    .background(
-                                        if (inputText.isNotBlank() && !isLoading)
-                                            MaterialTheme.colorScheme.primary
-                                        else
-                                            MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f)
-                                    )
-                                    .clickable(
-                                        enabled = inputText.isNotBlank() && !isLoading,
-                                        onClick = {
-                                            if (inputText.isNotBlank()) {
-                                                viewModel.sendMessage(inputText.trim())
-                                                inputText = ""
-                                            }
-                                        }
-                                    ),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Icon(
-                                    Icons.Outlined.Send,
-                                    contentDescription = "发送",
-                                    tint = if (inputText.isNotBlank() && !isLoading)
-                                        MaterialTheme.colorScheme.onPrimary
+                        )
+                        Spacer(modifier = Modifier.width(sdp(8.dp)))
+                        Box(
+                            modifier = Modifier
+                                .size(sdp(36.dp))
+                                .clip(CircleShape)
+                                .background(
+                                    if (inputText.isNotBlank() && !isLoading)
+                                        MaterialTheme.colorScheme.primary
                                     else
-                                        MaterialTheme.colorScheme.onSurface.copy(alpha = 0.3f),
-                                    modifier = Modifier.size(sdp(18.dp))
+                                        MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f)
                                 )
-                            }
+                                .clickable(
+                                    enabled = inputText.isNotBlank() && !isLoading,
+                                    onClick = {
+                                        if (inputText.isNotBlank()) {
+                                            viewModel.sendMessage(inputText.trim())
+                                            inputText = ""
+                                        }
+                                    }
+                                ),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                Icons.Outlined.Send,
+                                contentDescription = "发送",
+                                tint = if (inputText.isNotBlank() && !isLoading)
+                                    MaterialTheme.colorScheme.onPrimary
+                                else
+                                    MaterialTheme.colorScheme.onSurface.copy(alpha = 0.3f),
+                                modifier = Modifier.size(sdp(18.dp))
+                            )
                         }
                     }
                 }

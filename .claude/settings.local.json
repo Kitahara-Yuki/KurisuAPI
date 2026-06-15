@@ -49,7 +49,10 @@
       "Read(//Users/yuki/.claude/**)",
       "WebFetch(domain:raw.githubusercontent.com)",
       "Bash(curl -sL \"https://raw.githubusercontent.com/obra/superpowers-skills/main/skills/debugging/systematic-debugging/SKILL.md\")",
-      "Bash(cp *)"
+      "Bash(cp *)",
+      "Bash(cp /Users/yuki/Desktop/Android项目/KurisuAPI/app/build/outputs/apk/release/app-release.apk /Users/yuki/Desktop/KurisuAPI-v1.5.4.apk)",
+      "Bash(git add *)",
+      "Bash(git commit *)"
     ]
   }
 }
