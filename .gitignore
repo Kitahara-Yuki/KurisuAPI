@@ -1,0 +1,25 @@
+# 编译输出
+/build/
+/app/build/
+*.apk
+*.aab
+*.dex
+*.class
+
+# IDE
+.idea/
+*.iml
+.DS_Store
+
+# 本地配置（含签名密码）
+local.properties
+
+# Gradle
+.gradle/
+
+# Kotlin
+.kotlin/
+
+# 内存/计划文件（私人）
+.claude/plans/
+.claude/memory/
