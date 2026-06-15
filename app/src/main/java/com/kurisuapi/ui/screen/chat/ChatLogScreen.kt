@@ -1,6 +1,5 @@
 package com.kurisuapi.ui.screen.chat
 
-import android.os.Build
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
@@ -28,15 +27,10 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.kurisuapi.data.entity.ChatHistoryEntity
 import com.kurisuapi.ui.component.ChatBubble
-import com.kurisuapi.ui.component.FrostedGlassSurface
-import com.kurisuapi.ui.component.LiquidGlassSurface
+import com.kurisuapi.ui.component.LiquidGlassContainer
 import com.kurisuapi.ui.viewmodel.ContextUsage
 import com.kurisuapi.ui.viewmodel.ChatViewModel
 import com.kurisuapi.util.TokenEstimator
-import dev.chrisbanes.haze.HazeState
-import dev.chrisbanes.haze.hazeSource
-import com.kyant.backdrop.backdrops.layerBackdrop
-import com.kyant.backdrop.backdrops.rememberLayerBackdrop
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import com.kurisuapi.util.sdp
@@ -58,9 +52,6 @@ fun ChatLogScreen(
     val error by viewModel.error.collectAsState()
     var inputText by remember { mutableStateOf("") }
     val listState = rememberLazyListState()
-    val hazeState = remember { HazeState() }
-    val backdrop = rememberLayerBackdrop()
-    val canUseBackdrop = Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
 
     val isArchived = session?.isArchived == true
     val usage by viewModel.contextUsage.collectAsState()
@@ -144,20 +135,14 @@ fun ChatLogScreen(
             )
         }
     ) { paddingValues ->
-        Box(
+        LiquidGlassContainer(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(paddingValues)
-        ) {
-            // 背景层：消息列表铺满全屏，延伸到输入框背后（作为 Haze 模糊源）
-            Column(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .then(
-                        if (canUseBackdrop) Modifier.layerBackdrop(backdrop)
-                        else Modifier.hazeSource(state = hazeState)
-                    )
-            ) {
+                .padding(paddingValues),
+            glassModifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = sdp(12.dp), vertical = sdp(8.dp)),
+            background = {
                 error?.let { err ->
                     Card(
                         modifier = Modifier.fillMaxWidth().padding(sdp(8.dp)),
@@ -201,78 +186,30 @@ fun ChatLogScreen(
                         }
                     }
                 }
-            }
-
-            // 前景层：玻璃胶囊，悬浮在底部（API 31+ 液态玻璃，否则毛玻璃）
-            if (isArchived) {
-                if (canUseBackdrop) {
-                    LiquidGlassSurface(
-                        backdrop = backdrop,
+            },
+            glass = {
+                if (isArchived) {
+                    Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .align(Alignment.BottomCenter)
-                            .padding(horizontal = sdp(12.dp), vertical = sdp(8.dp))
+                            .padding(horizontal = sdp(16.dp), vertical = sdp(12.dp)),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.Center
                     ) {
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(horizontal = sdp(16.dp), vertical = sdp(12.dp)),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.Center
-                        ) {
-                            Icon(
-                                Icons.Outlined.Lock,
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f),
-                                modifier = Modifier.size(sdp(16.dp))
-                            )
-                            Spacer(modifier = Modifier.width(sdp(6.dp)))
-                            Text(
-                                "对话已归档，不能发送消息",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f)
-                            )
-                        }
+                        Icon(
+                            Icons.Outlined.Lock,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f),
+                            modifier = Modifier.size(sdp(16.dp))
+                        )
+                        Spacer(modifier = Modifier.width(sdp(6.dp)))
+                        Text(
+                            "对话已归档，不能发送消息",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f)
+                        )
                     }
                 } else {
-                    FrostedGlassSurface(
-                        hazeState = hazeState,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .align(Alignment.BottomCenter)
-                            .padding(horizontal = sdp(12.dp), vertical = sdp(8.dp))
-                    ) {
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(horizontal = sdp(16.dp), vertical = sdp(12.dp)),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.Center
-                        ) {
-                            Icon(
-                                Icons.Outlined.Lock,
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f),
-                                modifier = Modifier.size(sdp(16.dp))
-                            )
-                            Spacer(modifier = Modifier.width(sdp(6.dp)))
-                            Text(
-                                "对话已归档，不能发送消息",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f)
-                            )
-                        }
-                    }
-                }
-            } else {
-                if (canUseBackdrop) {
-                    LiquidGlassSurface(
-                        backdrop = backdrop,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .align(Alignment.BottomCenter)
-                            .padding(horizontal = sdp(12.dp), vertical = sdp(8.dp))
-                    ) {
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -338,82 +275,8 @@ fun ChatLogScreen(
                         }
                     }
                 }
-                } else {
-                    FrostedGlassSurface(
-                        hazeState = hazeState,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .align(Alignment.BottomCenter)
-                            .padding(horizontal = sdp(12.dp), vertical = sdp(8.dp))
-                    ) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = sdp(12.dp), vertical = sdp(4.dp)),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        OutlinedTextField(
-                            value = inputText,
-                            onValueChange = { inputText = it },
-                            modifier = Modifier.weight(1f),
-                            placeholder = {
-                                Text(
-                                    "输入消息...",
-                                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f)
-                                )
-                            },
-                            maxLines = 3,
-                            enabled = !isLoading,
-                            textStyle = MaterialTheme.typography.bodyMedium.copy(
-                                color = MaterialTheme.colorScheme.onSurface
-                            ),
-                            colors = OutlinedTextFieldDefaults.colors(
-                                focusedBorderColor = Color.Transparent,
-                                unfocusedBorderColor = Color.Transparent,
-                                disabledBorderColor = Color.Transparent,
-                                focusedContainerColor = Color.Transparent,
-                                unfocusedContainerColor = Color.Transparent,
-                                disabledContainerColor = Color.Transparent,
-                                cursorColor = MaterialTheme.colorScheme.primary
-                            )
-                        )
-                        Spacer(modifier = Modifier.width(sdp(8.dp)))
-                        Box(
-                            modifier = Modifier
-                                .size(sdp(36.dp))
-                                .clip(CircleShape)
-                                .background(
-                                    if (inputText.isNotBlank() && !isLoading)
-                                        MaterialTheme.colorScheme.primary
-                                    else
-                                        MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f)
-                                )
-                                .clickable(
-                                    enabled = inputText.isNotBlank() && !isLoading,
-                                    onClick = {
-                                        if (inputText.isNotBlank()) {
-                                            viewModel.sendMessage(inputText.trim())
-                                            inputText = ""
-                                        }
-                                    }
-                                ),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Icon(
-                                Icons.Outlined.Send,
-                                contentDescription = "发送",
-                                tint = if (inputText.isNotBlank() && !isLoading)
-                                    MaterialTheme.colorScheme.onPrimary
-                                else
-                                    MaterialTheme.colorScheme.onSurface.copy(alpha = 0.3f),
-                                modifier = Modifier.size(sdp(18.dp))
-                            )
-                        }
-                    }
-                }
-                }
             }
-        }
+        )
     }
 
     if (showWarningDialog) {
