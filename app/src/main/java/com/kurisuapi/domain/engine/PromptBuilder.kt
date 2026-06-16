@@ -17,7 +17,9 @@ class PromptBuilder @Inject constructor(
     private val userProfileRepository: UserProfileRepository,
     private val sessionRepository: ConversationSessionRepository,
     private val keywordExtractor: KeywordExtractor,
-    private val indexRepository: com.kurisuapi.data.repository.ConversationIndexRepository
+    private val indexRepository: com.kurisuapi.data.repository.ConversationIndexRepository,
+    private val embeddingService: EmbeddingService,
+    private val aiService: com.kurisuapi.domain.service.AiService
 ) {
     suspend fun buildMessages(
         character: CharacterEntity,
@@ -161,8 +163,9 @@ class PromptBuilder @Inject constructor(
     }
 
     /**
-     * 关键词搜索记忆：提取用户消息关键词 → 每个关键词搜索记忆库 →
-     * 多关键词命中加权（命中3次 > 命中2次 > 命中1次）→ 取前 topN 条。
+     * 混合搜索：关键词 + 语义向量融合。
+     * 先用关键词快速筛选候选池，再对候选记忆做语义相似度排序。
+     * 当 API 支持 embedding 时自动启用语义搜索，失败则回退到纯关键词。
      */
     private suspend fun searchMemoriesByKeywords(
         characterId: Long,
@@ -170,24 +173,49 @@ class PromptBuilder @Inject constructor(
         topN: Int
     ): List<MemoryEntity> {
         val keywords = keywordExtractor.extract(userMessage)
-        if (keywords.isEmpty()) return emptyList()
 
-        // 每个关键词搜一次，合并结果
-        val hitMap = mutableMapOf<Long, Pair<MemoryEntity, Int>>() // memoryId -> (entity, hitCount)
+        // 收集所有候选记忆（关键词命中 + 全文搜索）
+        val candidateMap = mutableMapOf<Long, Pair<MemoryEntity, Int>>()
         for (keyword in keywords) {
             val results = memoryRepository.search(characterId, keyword)
             for (memory in results) {
-                val existing = hitMap[memory.id]
+                val existing = candidateMap[memory.id]
                 if (existing != null) {
-                    hitMap[memory.id] = Pair(existing.first, existing.second + 1)
+                    candidateMap[memory.id] = Pair(existing.first, existing.second + 1)
                 } else {
-                    hitMap[memory.id] = Pair(memory, 1)
+                    candidateMap[memory.id] = Pair(memory, 1)
                 }
             }
         }
 
-        // 多关键词命中的排前面，同等命中按重要性排
-        return hitMap.values
+        if (candidateMap.isEmpty()) return emptyList()
+
+        // 尝试生成用户消息的语义向量
+        val queryEmbedding = try {
+            aiService.embed(userMessage)
+        } catch (e: Exception) {
+            null
+        }
+
+        // 如果有查询向量，对候选记忆做语义相似度排序
+        if (queryEmbedding != null) {
+            val candidates = candidateMap.values.map { it.first }
+            val semanticResults = embeddingService.semanticSearch(queryEmbedding, candidates, topN)
+
+            // 语义结果 + 关键词命中（去重）
+            val semanticIds = semanticResults.map { it.first.id }.toSet()
+            val keywordOnly = candidates
+                .filter { it.id !in semanticIds }
+                .sortedWith(
+                    compareByDescending<MemoryEntity> { candidateMap[it.id]?.second ?: 0 }
+                        .thenByDescending { it.importance }
+                )
+
+            return (semanticResults.map { it.first } + keywordOnly).take(topN)
+        }
+
+        // 无查询向量时，关键词命中的排前面
+        return candidateMap.values
             .sortedWith(compareByDescending<Pair<MemoryEntity, Int>> { it.second }
                 .thenByDescending { it.first.importance })
             .take(topN)

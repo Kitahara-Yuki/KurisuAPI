@@ -112,60 +112,76 @@ fun CharacterListScreen(
                         ),
                         shape = MaterialTheme.shapes.medium
                     ) {
-                        ListItem(
-                            headlineContent = {
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    Text(character.name)
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(sdp(16.dp)),
+                            verticalAlignment = Alignment.Top
+                        ) {
+                            Icon(
+                                Icons.Outlined.Person,
+                                contentDescription = null,
+                                tint = if (isActive) MaterialTheme.colorScheme.primary
+                                else MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.padding(top = sdp(4.dp), end = sdp(16.dp))
+                            )
+                            Column(modifier = Modifier.weight(1f)) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text(
+                                        character.name,
+                                        style = MaterialTheme.typography.titleMedium,
+                                        modifier = Modifier.weight(1f)
+                                    )
+                                    Row {
+                                        IconButton(onClick = {
+                                            listViewModel.setActiveCharacter(character.id)
+                                        }) {
+                                            Icon(
+                                                if (isActive) Icons.Outlined.CheckCircle else Icons.Outlined.AccountCircle,
+                                                contentDescription = "设为微信聊天角色",
+                                                tint = if (isActive) MaterialTheme.colorScheme.primary
+                                                else MaterialTheme.colorScheme.onSurfaceVariant
+                                            )
+                                        }
+                                        IconButton(onClick = {
+                                            onNavigate(Screen.CharacterEdit.createRoute(character.id))
+                                        }) {
+                                            Icon(Icons.Outlined.Edit, contentDescription = "编辑")
+                                        }
+                                        IconButton(onClick = {
+                                            characterToDelete = character
+                                        }) {
+                                            Icon(Icons.Outlined.Delete, contentDescription = "删除",
+                                                tint = MaterialTheme.colorScheme.error)
+                                        }
+                                    }
+                                }
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.Bottom
+                                ) {
+                                    Text(
+                                        if (character.personality.isNotBlank()) character.personality
+                                        else character.speakingStyle.ifBlank { "未设置个性" },
+                                        maxLines = 2,
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                                        modifier = Modifier.weight(1f)
+                                    )
                                     if (isActive) {
-                                        Spacer(modifier = Modifier.width(sdp(8.dp)))
                                         SuggestionChip(
                                             onClick = {},
                                             label = { Text("微信聊天中", style = MaterialTheme.typography.labelSmall) }
                                         )
                                     }
                                 }
-                            },
-                            supportingContent = {
-                                Text(
-                                    if (character.personality.isNotBlank()) character.personality
-                                    else character.speakingStyle.ifBlank { "未设置个性" },
-                                    maxLines = 2
-                                )
-                            },
-                            leadingContent = {
-                                Icon(
-                                    Icons.Outlined.Person,
-                                    contentDescription = null,
-                                    tint = if (isActive) MaterialTheme.colorScheme.primary
-                                    else MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                            },
-                            trailingContent = {
-                                Row {
-                                    IconButton(onClick = {
-                                        listViewModel.setActiveCharacter(character.id)
-                                    }) {
-                                        Icon(
-                                            if (isActive) Icons.Outlined.CheckCircle else Icons.Outlined.AccountCircle,
-                                            contentDescription = "设为微信聊天角色",
-                                            tint = if (isActive) MaterialTheme.colorScheme.primary
-                                            else MaterialTheme.colorScheme.onSurfaceVariant
-                                        )
-                                    }
-                                    IconButton(onClick = {
-                                        onNavigate(Screen.CharacterEdit.createRoute(character.id))
-                                    }) {
-                                        Icon(Icons.Outlined.Edit, contentDescription = "编辑")
-                                    }
-                                    IconButton(onClick = {
-                                        characterToDelete = character
-                                    }) {
-                                        Icon(Icons.Outlined.Delete, contentDescription = "删除",
-                                            tint = MaterialTheme.colorScheme.error)
-                                    }
-                                }
                             }
-                        )
+                        }
                     }
                 }
             }

@@ -53,7 +53,12 @@
       "Bash(cp /Users/yuki/Desktop/Android项目/KurisuAPI/app/build/outputs/apk/release/app-release.apk /Users/yuki/Desktop/KurisuAPI-v1.5.4.apk)",
       "Bash(git add *)",
       "Bash(git commit *)",
-      "Bash(./gradlew assembleRelease --stacktrace)"
+      "Bash(./gradlew assembleRelease --stacktrace)",
+      "Bash(./gradlew :app:compileReleaseKotlin)",
+      "Bash(cp /Users/yuki/Desktop/01.png /Users/yuki/Desktop/Android项目/KurisuAPI/app/src/main/res/drawable/ic_home_title_light.png)",
+      "Bash(cp /Users/yuki/Desktop/02.png /Users/yuki/Desktop/Android项目/KurisuAPI/app/src/main/res/drawable/ic_home_title_dark.png)",
+      "Bash(git checkout *)",
+      "Bash(./gradlew :app:compileReleaseKotlin --stacktrace)"
     ]
   }
 }

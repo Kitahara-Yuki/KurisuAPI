@@ -60,7 +60,6 @@ fun ConversationListScreen(
     var hideModeLabels by rememberSaveable { mutableStateOf(false) }
     var showRecycleBin by remember { mutableStateOf(false) }
     var showNewSessionDialog by remember { mutableStateOf(false) }
-    var showHelpDialog by remember { mutableStateOf(false) }
 
     LaunchedEffect(characterId) {
         viewModel.loadCharacter(characterId)
@@ -76,9 +75,6 @@ fun ConversationListScreen(
                     }
                 },
                 actions = {
-                    TextButton(onClick = { showHelpDialog = true }) {
-                        Text("帮助", style = MaterialTheme.typography.labelMedium)
-                    }
                     IconButton(onClick = { showRecycleBin = true }) {
                         if (deletedSessions.isNotEmpty()) {
                             BadgedBox(badge = {
@@ -175,10 +171,6 @@ fun ConversationListScreen(
     }
 
     // --- Dialogs (unchanged business logic, visual only) ---
-
-    if (showHelpDialog) {
-        HelpDialog(onDismiss = { showHelpDialog = false })
-    }
 
     if (showNewSessionDialog) {
         NewSessionModeDialog(
@@ -897,33 +889,6 @@ private fun NewSessionModeDialog(onDismiss: () -> Unit, onSelectMode: (String) -
         },
         confirmButton = { TextButton(onClick = { onSelectMode(selectedMode) }) { Text("创建") } },
         dismissButton = { TextButton(onClick = onDismiss) { Text("取消") } }
-    )
-}
-
-@Composable
-private fun HelpDialog(onDismiss: () -> Unit) {
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text("常见问题") },
-        text = {
-            Column(
-                modifier = Modifier.fillMaxWidth().verticalScroll(rememberScrollState()),
-                verticalArrangement = Arrangement.spacedBy(sdp(8.dp))
-            ) {
-                Text("Q: 为什么在对话模式下，角色还是会加动作描述词？")
-                Text("A: 检查这个角色的「系统提示词」有没有写动作相关的指令。另外角色的「性格」和「说话风格」里如果有「爱做动作」「肢体语言丰富」这类词，AI 偶尔会漏网，可以直接删除动作相关的内容，或者加上不准说动作描述词等指令。")
-                Spacer(modifier = Modifier.height(sdp(4.dp)))
-                Text("Q: 已经创建的对话能改模式吗？")
-                Text("A: 不能。模式是创建对话时定下来的，如果想换一个模式，新建一个对话就好。旧对话的聊天记录还在，随时可以回去看。")
-                Spacer(modifier = Modifier.height(sdp(4.dp)))
-                Text("Q: 记忆是自动生成的吗？")
-                Text("A: 是的。每聊大约 6 条消息，AI 会自动从对话里提取关于你的事，存到记忆页面。你也可以在设置里关掉这个功能。")
-                Spacer(modifier = Modifier.height(sdp(4.dp)))
-                Text("Q: 重要的记忆会丢吗？")
-                Text("A: 不会。删除对话时会连带删掉那条对话里的记忆，但跟其他对话相关的记忆不受影响。")
-            }
-        },
-        confirmButton = { TextButton(onClick = onDismiss) { Text("知道了") } }
     )
 }
 

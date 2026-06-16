@@ -124,6 +124,13 @@ class ChatViewModel @Inject constructor(
         }
     }
 
+    /** 强制刷新上下文额度，用于从设置页返回后更新显示 */
+    fun refreshContextUsage() {
+        viewModelScope.launch {
+            try { recalculateContextUsage() } catch (_: Exception) { }
+        }
+    }
+
     fun loadSession(sessionId: Long) {
         _sessionId.value = sessionId
         // 旧数据兼容：加载无摘要的旧会话时，后台检查是否需要生成摘要

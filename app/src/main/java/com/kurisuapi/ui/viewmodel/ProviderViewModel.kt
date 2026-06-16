@@ -109,12 +109,16 @@ class ProviderViewModel @Inject constructor(
         onDone: () -> Unit
     ) {
         viewModelScope.launch {
-            val now = System.currentTimeMillis()
-            val savedId: Long
-            if (id != null && id > 0) {
-                savedId = id
-                val existing = providerRepository.getById(id)
-                if (existing != null) {
+            try {
+                val now = System.currentTimeMillis()
+                val savedId: Long
+                if (id != null && id > 0) {
+                    val existing = providerRepository.getById(id)
+                    if (existing == null) {
+                        _message.value = "保存失败：该管理项不存在，请返回重试"
+                        return@launch
+                    }
+                    savedId = id
                     providerRepository.update(
                         existing.copy(
                             name = name, type = type, baseUrl = baseUrl,
@@ -127,29 +131,31 @@ class ProviderViewModel @Inject constructor(
                             contextWindow = contextWindow
                         )
                     )
-                }
-            } else {
-                // Bug fix: 捕获 insert 返回的新 ID，用于后续 setDefault
-                savedId = providerRepository.insert(
-                    ProviderEntity(
-                        name = name, type = type, baseUrl = baseUrl,
-                        apiKey = apiKey, modelsUrlOverride = modelsUrlOverride,
-                        model = model, temperature = temperature, maxTokens = maxTokens,
-                        isDefault = isDefault,
-                        thinkingEnabled = thinkingEnabled,
-                        reasoningEffort = reasoningEffort,
-                        thinkingBudgetTokens = thinkingBudgetTokens,
-                        contextWindow = contextWindow,
-                        createdAt = now, updatedAt = now
+                } else {
+                    // Bug fix: 捕获 insert 返回的新 ID，用于后续 setDefault
+                    savedId = providerRepository.insert(
+                        ProviderEntity(
+                            name = name, type = type, baseUrl = baseUrl,
+                            apiKey = apiKey, modelsUrlOverride = modelsUrlOverride,
+                            model = model, temperature = temperature, maxTokens = maxTokens,
+                            isDefault = isDefault,
+                            thinkingEnabled = thinkingEnabled,
+                            reasoningEffort = reasoningEffort,
+                            thinkingBudgetTokens = thinkingBudgetTokens,
+                            contextWindow = contextWindow,
+                            createdAt = now, updatedAt = now
+                        )
                     )
-                )
+                }
+                // Bug fix: 使用 savedId（insert 返回值或已有 id）而非查询 getDefault
+                if (isDefault && savedId > 0) {
+                    providerRepository.setDefault(savedId)
+                }
+                _message.value = "已保存"
+                onDone()
+            } catch (e: Exception) {
+                _message.value = "保存失败：${e.message ?: "未知错误"}"
             }
-            // Bug fix: 使用 savedId（insert 返回值或已有 id）而非查询 getDefault
-            if (isDefault && savedId > 0) {
-                providerRepository.setDefault(savedId)
-            }
-            _message.value = "已保存"
-            onDone()
         }
     }
 

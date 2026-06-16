@@ -26,6 +26,22 @@ class OpenAiCompatibleProvider(
     override val providerId = "openai_compatible"
 
     companion object {
+        private const val TAG = "OpenAICompat"
+
+        /** 根据 API 地址自动识别嵌入模型 */
+        private fun resolveEmbeddingModel(baseUrl: String): String {
+            val host = baseUrl.lowercase()
+            return when {
+                "deepseek" in host -> "deepseek-embed"
+                "openai" in host -> "text-embedding-3-small"
+                "zhipu" in host || "bigmodel" in host -> "embedding-2"
+                "moonshot" in host -> "moonshot-v1-8k"
+                "dashscope" in host || "aliyun" in host -> "text-embedding-v3"
+                "siliconflow" in host -> "BAAI/bge-large-zh-v1.5"
+                else -> "text-embedding-3-small"  // 通用兼容
+            }
+        }
+
         // 已知的兼容后缀，按长度降序排列（最长优先匹配）
         private val KNOWN_COMPAT_SUFFIXES = listOf(
             "/api/claudecode",
@@ -602,4 +618,42 @@ class OpenAiCompatibleProvider(
         @SerializedName("context_window")
         val contextWindow: Long? = null
     )
+
+    /**
+     * 生成文本的嵌入向量（embedding）。
+     * 调用 OpenAI-compatible 的 /v1/embeddings 接口。
+     * @return FloatArray 嵌入向量，失败返回 null
+     */
+    suspend fun embed(text: String, apiKey: String, baseUrl: String): FloatArray? = withContext(Dispatchers.IO) {
+        try {
+            val embeddingModel = resolveEmbeddingModel(baseUrl)
+            val requestMap = mapOf(
+                "model" to embeddingModel,
+                "input" to text
+            )
+            val request = Request.Builder()
+                .url("${baseUrl.trimEnd('/')}/embeddings")
+                .addHeader("Authorization", "Bearer $apiKey")
+                .addHeader("Content-Type", "application/json")
+                .post(gson.toJson(requestMap).toRequestBody("application/json".toMediaType()))
+                .build()
+            val response = okHttpClient.newCall(request).execute()
+            if (!response.isSuccessful) {
+                Log.w(TAG, "Embedding API returned ${response.code}")
+                return@withContext null
+            }
+            val body = response.body?.string() ?: return@withContext null
+            val json = gson.fromJson(body, com.google.gson.JsonObject::class.java)
+            val embeddingArray = json.getAsJsonArray("data")
+                ?.get(0)?.asJsonObject
+                ?.getAsJsonArray("embedding")
+                ?: return@withContext null
+            FloatArray(embeddingArray.size()) { i ->
+                embeddingArray.get(i).asFloat
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "Embedding generation failed: ${e.message}")
+            null
+        }
+    }
 }

@@ -245,4 +245,24 @@ class AiService @Inject constructor(
             }
         }
     }
+
+    /**
+     * 生成文本的嵌入向量，用于语义搜索。
+     * 使用默认 provider 的 embedding API。
+     * @return FloatArray 嵌入向量，失败返回 null
+     */
+    suspend fun embed(text: String): FloatArray? {
+        return try {
+            val provider = providerRepository.getDefault() ?: return null
+            val apiKey = provider.apiKey.ifBlank { return null }
+            val aiProvider = providerFactory.create(provider)
+            when (aiProvider) {
+                is OpenAiCompatibleProvider -> aiProvider.embed(text, apiKey, provider.baseUrl)
+                else -> null // Anthropic/Gemini embedding 暂不支持
+            }
+        } catch (e: Exception) {
+            Log.w("AiService", "Embedding failed: ${e.message}")
+            null
+        }
+    }
 }

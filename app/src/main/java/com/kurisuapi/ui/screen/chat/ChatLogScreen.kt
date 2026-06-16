@@ -34,6 +34,10 @@ import com.kurisuapi.util.TokenEstimator
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import com.kurisuapi.util.sdp
+import androidx.compose.ui.tooling.preview.Preview
+import androidx.compose.ui.platform.LocalLifecycleOwner
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
@@ -42,6 +46,17 @@ fun ChatLogScreen(
     onNavigateBack: () -> Unit,
     viewModel: ChatViewModel = hiltViewModel()
 ) {
+    // 每次从设置页返回时刷新上下文额度显示
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) {
+                viewModel.refreshContextUsage()
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
     val character by viewModel.activeCharacter.collectAsState()
     val session by viewModel.session.collectAsState()
     val messages by viewModel.messages.collectAsState()
@@ -142,7 +157,7 @@ fun ChatLogScreen(
             glassModifier = Modifier
                 .fillMaxWidth()
                 .padding(horizontal = sdp(12.dp), vertical = sdp(8.dp)),
-            bottomSpacing = sdp(16.dp),
+            bottomSpacing = sdp(26.dp),
             background = {
                 error?.let { err ->
                     Card(
@@ -160,7 +175,7 @@ fun ChatLogScreen(
                     modifier = Modifier.fillMaxSize().padding(horizontal = sdp(16.dp)),
                     state = listState,
                     verticalArrangement = Arrangement.spacedBy(sdp(8.dp)),
-                    contentPadding = PaddingValues(top = sdp(8.dp), bottom = sdp(96.dp))
+                    contentPadding = PaddingValues(top = sdp(8.dp), bottom = sdp(106.dp))
                 ) {
                     items(messages, key = { it.id }) { message ->
                         ChatBubble(message = message, modifier = Modifier)
@@ -296,8 +311,8 @@ fun ChatLogScreen(
     if (showContextDialog) {
         val hasTotal = usage.totalTokens > 0
         val ratio = if (hasTotal) (usage.usedTokens.toFloat() / usage.totalTokens).coerceIn(0f, 1f) else 0f
-        val yellowAt = if (usage.thinkingEnabled) 0.7f else 0.7f
-        val redAt = if (usage.thinkingEnabled) 0.80f else 0.9f
+        val yellowAt = if (usage.thinkingEnabled) 0.60f else 0.70f
+        val redAt = if (usage.thinkingEnabled) 0.80f else 0.90f
         val barColor = when {
             !hasTotal -> MaterialTheme.colorScheme.onSurface.copy(alpha = 0.3f)
             ratio > redAt -> MaterialTheme.colorScheme.error
@@ -405,8 +420,8 @@ private fun SmoothStreamingBubble(fullText: String, characterId: Long, sessionId
 private fun CircularContextRing(usage: ContextUsage, thinkingEnabled: Boolean = false, modifier: Modifier = Modifier) {
     val hasTotal = usage.totalTokens > 0
     val ratio = if (hasTotal) (usage.usedTokens.toFloat() / usage.totalTokens).coerceIn(0f, 1f) else 0f
-    val yellowAt = if (thinkingEnabled) 0.7f else 0.7f
-    val redAt = if (thinkingEnabled) 0.8f else 0.9f
+    val yellowAt = if (thinkingEnabled) 0.60f else 0.70f
+    val redAt = if (thinkingEnabled) 0.80f else 0.90f
     val progressColor = when {
         !hasTotal -> MaterialTheme.colorScheme.onSurface.copy(alpha = 0.3f)
         ratio > redAt -> MaterialTheme.colorScheme.error
@@ -431,5 +446,70 @@ private fun CircularContextRing(usage: ContextUsage, thinkingEnabled: Boolean = 
             }
         }
         Text(text = percentageText, style = MaterialTheme.typography.labelSmall, color = progressColor)
+    }
+}
+
+// ---------- 预览 ----------
+@Preview(showBackground = true)
+@Composable
+private fun CircularContextRingPreview() {
+    MaterialTheme {
+        Row(
+            modifier = Modifier.padding(24.dp),
+            horizontalArrangement = Arrangement.spacedBy(16.dp)
+        ) {
+            CircularContextRing(
+                usage = ContextUsage(usedTokens = 4000, totalTokens = 10000),
+                thinkingEnabled = false,
+                modifier = Modifier.size(48.dp)
+            )
+            CircularContextRing(
+                usage = ContextUsage(usedTokens = 8000, totalTokens = 10000),
+                thinkingEnabled = false,
+                modifier = Modifier.size(48.dp)
+            )
+            CircularContextRing(
+                usage = ContextUsage(usedTokens = 0, totalTokens = 10000),
+                thinkingEnabled = false,
+                modifier = Modifier.size(48.dp)
+            )
+        }
+    }
+}
+
+@Preview(showBackground = true)
+@Composable
+private fun ChatBubblePreview() {
+    MaterialTheme {
+        LiquidGlassContainer(
+            modifier = Modifier.fillMaxWidth().height(500.dp),
+            background = {
+                // 液态玻璃背景
+            },
+            glass = {
+                Column(modifier = Modifier.fillMaxSize().padding(12.dp)) {
+                    ChatBubble(
+                        message = ChatHistoryEntity(
+                            characterId = 1, sessionId = 1,
+                            sender = "user", content = "你好！今天天气真好。"
+                        )
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    ChatBubble(
+                        message = ChatHistoryEntity(
+                            characterId = 1, sessionId = 1,
+                            sender = "ai", content = "是的！阳光明媚，适合出去走走。要不要一起去公园？"
+                        )
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    ChatBubble(
+                        message = ChatHistoryEntity(
+                            characterId = 1, sessionId = 1,
+                            sender = "user", content = "好呀，几点出发？"
+                        )
+                    )
+                }
+            }
+        )
     }
 }

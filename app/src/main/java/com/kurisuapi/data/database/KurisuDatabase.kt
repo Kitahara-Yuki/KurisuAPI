@@ -20,7 +20,7 @@ import com.kurisuapi.data.entity.*
         ConversationFolderEntity::class,
         ConversationIndexEntity::class
     ],
-    version = 22,
+    version = 23,
     exportSchema = false
 )
 abstract class KurisuDatabase : RoomDatabase() {

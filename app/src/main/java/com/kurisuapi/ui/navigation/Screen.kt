@@ -2,6 +2,7 @@ package com.kurisuapi.ui.navigation
 
 sealed class Screen(val route: String) {
     // Detail pages (push navigation from tabs)
+    data object CharacterList : Screen("character_list")
     data object CharacterEdit : Screen("character_edit/{characterId}") {
         fun createRoute(characterId: Long = -1L): String = "character_edit/$characterId"
     }

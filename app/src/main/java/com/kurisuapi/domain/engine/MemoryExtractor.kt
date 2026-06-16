@@ -38,6 +38,7 @@ class MemoryExtractor @Inject constructor(
     private val memoryRepository: MemoryRepository,
     private val userProfileRepository: UserProfileRepository,
     private val emotionRepository: EmotionRepository,
+    private val embeddingService: EmbeddingService,
     private val relationshipRepository: RelationshipRepository,
     private val indexRepository: com.kurisuapi.data.repository.ConversationIndexRepository,
     private val settingsRepository: com.kurisuapi.data.repository.SettingsRepository,
@@ -356,13 +357,22 @@ class MemoryExtractor @Inject constructor(
 
     private suspend fun insertAutoMemory(characterId: Long, content: String, importance: Int = 5, sessionId: Long = 0) {
         try {
+            // 尝试生成语义向量（失败不影响记忆存储）
+            val embedding = try {
+                aiService.embed(content)?.let { embeddingService.encodeEmbedding(it) }
+            } catch (e: Exception) {
+                Log.w(TAG, "向量生成失败，跳过语义索引: ${e.message}")
+                null
+            }
+
             memoryRepository.insert(
                 MemoryEntity(
                     characterId = characterId,
                     content = content,
                     importance = MemoryEntity.clampImportance(importance),
                     source = "auto",
-                    sessionId = sessionId
+                    sessionId = sessionId,
+                    embedding = embedding
                 )
             )
         } catch (e: Exception) {

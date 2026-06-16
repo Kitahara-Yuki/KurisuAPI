@@ -99,10 +99,6 @@ fun MainScreen(
                         TabItem.HOME -> HomeScreen(
                             onNavigate = { route -> navController.navigate(route) }
                         )
-                        TabItem.CHARACTER -> CharacterListScreen(
-                            onNavigate = { route -> navController.navigate(route) },
-                            onNavigateBack = { }
-                        )
                         TabItem.MEMORY -> MemoryListScreen(
                             characterId = activeCharId,
                             onNavigateBack = { }
@@ -127,6 +123,12 @@ fun MainScreen(
                 modifier = Modifier.fillMaxSize()
             ) {
                 composable("tab_main") { }
+                composable(Screen.CharacterList.route) {
+                    CharacterListScreen(
+                        onNavigate = { route -> navController.navigate(route) },
+                        onNavigateBack = { navController.popBackStack() }
+                    )
+                }
                 composable(
                     route = Screen.CharacterEdit.route,
                     arguments = listOf(navArgument("characterId") { type = NavType.LongType })

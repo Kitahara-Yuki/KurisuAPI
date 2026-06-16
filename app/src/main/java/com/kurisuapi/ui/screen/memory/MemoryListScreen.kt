@@ -29,9 +29,8 @@ fun MemoryListScreen(
 ) {
     val memories by viewModel.memories.collectAsState()
     val userProfile by viewModel.userProfile.collectAsState()
-    val isRefining by viewModel.isRefining.collectAsState()
-    val isRefreshing by viewModel.isRefreshing.collectAsState()
-    val refreshProgress by viewModel.refreshProgress.collectAsState()
+    val isOptimizing by viewModel.isOptimizing.collectAsState()
+    val optimizeProgress by viewModel.optimizeProgress.collectAsState()
     val message by viewModel.message.collectAsState()
     var showAddDialog by remember { mutableStateOf(false) }
     var editingMemory by remember { mutableStateOf<MemoryEntity?>(null) }
@@ -90,13 +89,13 @@ fun MemoryListScreen(
                         }
                     },
                     actions = {
-                        if (isRefreshing) {
+                        if (isOptimizing) {
                             Row(
                                 verticalAlignment = Alignment.CenterVertically,
                                 modifier = Modifier.padding(end = sdp(8.dp))
                             ) {
-                                if (refreshProgress.isNotBlank()) {
-                                    Text(refreshProgress, style = MaterialTheme.typography.labelSmall,
+                                if (optimizeProgress.isNotBlank()) {
+                                    Text(optimizeProgress, style = MaterialTheme.typography.labelSmall,
                                         color = MaterialTheme.colorScheme.primary)
                                 }
                                 CircularProgressIndicator(
@@ -105,18 +104,8 @@ fun MemoryListScreen(
                                 )
                             }
                         } else {
-                            IconButton(onClick = { viewModel.refreshAllMemories() }) {
-                                Icon(Icons.Outlined.Refresh, contentDescription = "刷新全部记忆")
-                            }
-                        }
-                        if (isRefining) {
-                            CircularProgressIndicator(
-                                modifier = Modifier.size(sdp(20.dp)).padding(end = sdp(12.dp)),
-                                strokeWidth = 2.dp
-                            )
-                        } else {
-                            IconButton(onClick = { viewModel.refineMemory() }) {
-                                Icon(Icons.Outlined.AutoAwesome, contentDescription = "提炼记忆")
+                            IconButton(onClick = { viewModel.optimizeMemories() }) {
+                                Icon(Icons.Outlined.Refresh, contentDescription = "优化记忆")
                             }
                         }
                     },

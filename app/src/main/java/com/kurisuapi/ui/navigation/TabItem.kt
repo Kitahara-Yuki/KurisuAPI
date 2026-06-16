@@ -10,10 +10,9 @@ enum class TabItem(
     val icon: ImageVector
 ) {
     HOME(0, "首页", Icons.Outlined.Home),
-    CHARACTER(1, "角色", Icons.Outlined.Person),
-    MEMORY(2, "记忆", Icons.Outlined.Psychology),
-    CHAT_LOG(3, "日志", Icons.Outlined.History),
-    SETTINGS(4, "设置", Icons.Outlined.Settings);
+    MEMORY(1, "记忆", Icons.Outlined.Psychology),
+    CHAT_LOG(2, "对话", Icons.Outlined.Send),
+    SETTINGS(3, "设置", Icons.Outlined.Settings);
 
     companion object {
         fun fromIndex(index: Int): TabItem = entries.first { it.index == index }

@@ -334,12 +334,49 @@ fun ProviderEditScreen(
                 }
             }
 
-            // Context window - kept but simplified for this file
+            // Context window - 带预设选项的下拉按钮
             item {
+                var showContextPresets by remember { mutableStateOf(false) }
                 OutlinedTextField(
                     value = contextWindow, onValueChange = { contextWindow = it },
                     label = { Text("上下文长度") }, placeholder = { Text("0 表示不限制") },
-                    modifier = Modifier.fillMaxWidth(), singleLine = true
+                    modifier = Modifier.fillMaxWidth(), singleLine = true,
+                    trailingIcon = {
+                        Box {
+                            IconButton(onClick = { showContextPresets = true }, modifier = Modifier.size(sdp(40.dp))) {
+                                Icon(Icons.Outlined.ArrowDropDown, contentDescription = "预设选项",
+                                    modifier = Modifier.size(sdp(24.dp)))
+                            }
+                            DropdownMenu(expanded = showContextPresets,
+                                onDismissRequest = { showContextPresets = false }) {
+                                listOf(
+                                    Triple("32768", "32K", ""),
+                                    Triple("65536", "64K", ""),
+                                    Triple("131072", "128K", ""),
+                                    Triple("524288", "512K", ""),
+                                    Triple("1048576", "1M", "需模型支持"),
+                                ).forEach { (value, label, tag) ->
+                                    DropdownMenuItem(text = {
+                                        Column {
+                                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                                Text(label, fontWeight = FontWeight.Medium)
+                                                Spacer(Modifier.width(sdp(8.dp)))
+                                                Text("$value tokens", style = MaterialTheme.typography.bodySmall,
+                                                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
+                                            }
+                                            if (tag.isNotEmpty()) {
+                                                Spacer(Modifier.height(sdp(4.dp)))
+                                                AssistChip(onClick = {}, label = { Text(tag, style = MaterialTheme.typography.labelSmall) },
+                                                    modifier = Modifier.height(sdp(24.dp)))
+                                            }
+                                        }
+                                    }, onClick = { contextWindow = value; showContextPresets = false },
+                                        leadingIcon = { if (contextWindow == value) Icon(Icons.Outlined.Check,
+                                            contentDescription = null, tint = MaterialTheme.colorScheme.primary) })
+                                }
+                            }
+                        }
+                    }
                 )
             }
 

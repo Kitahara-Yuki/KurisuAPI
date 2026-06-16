@@ -18,6 +18,7 @@ data class MemoryEntity(
     val sessionId: Long = 0,   // 关联的对话 ID，0=未关联（旧数据）
     val isDeleted: Boolean = false,  // 软删除标记
     val deletedAt: Long = 0,   // 删除时间戳
+    val embedding: ByteArray? = null,  // 语义搜索向量（Float32 数组的原始字节）
     val createdAt: Long = System.currentTimeMillis(),
     val updatedAt: Long = System.currentTimeMillis()
 ) {

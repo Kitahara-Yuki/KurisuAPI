@@ -95,7 +95,9 @@ fun HomeScreen(
             // Active Character
             item {
                 Card(
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { onNavigate(Screen.CharacterList.route) },
                     colors = CardDefaults.cardColors(
                         containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.85f)
                     ),
@@ -123,7 +125,7 @@ fun HomeScreen(
                                 fontWeight = FontWeight.SemiBold
                             )
                             Text(
-                                text = "请切换到「角色」标签页管理角色",
+                                text = "点击选择角色",
                                 style = MaterialTheme.typography.bodyMedium,
                                 color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
                             )

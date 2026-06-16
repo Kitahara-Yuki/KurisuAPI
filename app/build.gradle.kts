@@ -23,8 +23,8 @@ android {
         applicationId = "com.kurisuapi"
         minSdk = 26
         targetSdk = 35
-        versionCode = 6
-        versionName = "1.5.4"
+        versionCode = 7
+        versionName = "1.5.5"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
@@ -135,4 +135,7 @@ dependencies {
 
     // Backdrop (liquid glass)
     implementation(libs.backdrop)
+
+    // SQLite-Vector (语义搜索)
+    implementation("ai.sqlite:vector:0.9.34")
 }

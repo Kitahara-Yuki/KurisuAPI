@@ -3,6 +3,8 @@ package com.kurisuapi.ui.screen.settings
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
@@ -31,6 +33,7 @@ fun SettingsScreen(
     val botProactiveInterval by weChatViewModel.botProactiveInterval.collectAsState()
     val showThinking by weChatViewModel.showThinking.collectAsState()
     val autoMemoryEnabled by weChatViewModel.autoMemoryEnabled.collectAsState()
+    var showHelpDialog by remember { mutableStateOf(false) }
     var intervalText by remember { mutableStateOf(botProactiveInterval.toString()) }
     LaunchedEffect(botProactiveInterval) {
         intervalText = botProactiveInterval.toString()
@@ -43,6 +46,18 @@ fun SettingsScreen(
         topBar = {
             TopAppBar(
                 title = { Text("设置", fontWeight = FontWeight.SemiBold) },
+                actions = {
+                    IconButton(
+                        onClick = { showHelpDialog = true },
+                        modifier = Modifier.padding(end = sdp(8.dp))
+                    ) {
+                        Icon(
+                            Icons.Outlined.HelpOutline,
+                            contentDescription = "使用帮助",
+                            tint = MaterialTheme.colorScheme.primary
+                        )
+                    }
+                },
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.92f)
                 )
@@ -303,6 +318,10 @@ fun SettingsScreen(
                 )
             }
         }
+
+        if (showHelpDialog) {
+            HelpDialog(onDismiss = { showHelpDialog = false })
+        }
     }
 }
 
@@ -336,4 +355,33 @@ private fun SettingsItem(
             }
         )
     }
+}
+
+@Composable
+private fun HelpDialog(onDismiss: () -> Unit) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("常见问题") },
+        text = {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(sdp(8.dp))
+            ) {
+                Text("Q: 为什么在对话模式下，角色还是会加动作描述词？")
+                Text("A: 检查这个角色的「系统提示词」有没有写动作相关的指令。另外角色的「性格」和「说话风格」里如果有「爱做动作」「肢体语言丰富」这类词，AI 偶尔会漏网，可以直接删除动作相关的内容，或者加上不准说动作描述词等指令。")
+                Spacer(modifier = Modifier.height(sdp(4.dp)))
+                Text("Q: 已经创建的对话能改模式吗？")
+                Text("A: 不能。模式是创建对话时定下来的，如果想换一个模式，新建一个对话就好。旧对话的聊天记录还在，随时可以回去看。")
+                Spacer(modifier = Modifier.height(sdp(4.dp)))
+                Text("Q: 记忆是自动生成的吗？")
+                Text("A: 是的。每聊大约 6 条消息，AI 会自动从对话里提取关于你的事，存到记忆页面。你也可以在设置里关掉这个功能。")
+                Spacer(modifier = Modifier.height(sdp(4.dp)))
+                Text("Q: 重要的记忆会丢吗？")
+                Text("A: 不会。删除对话时会连带删掉那条对话里的记忆，但跟其他对话相关的记忆不受影响。")
+            }
+        },
+        confirmButton = { TextButton(onClick = onDismiss) { Text("知道了") } }
+    )
 }
