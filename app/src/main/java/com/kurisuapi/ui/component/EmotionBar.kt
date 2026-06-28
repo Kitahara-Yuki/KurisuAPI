@@ -8,6 +8,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import com.kurisuapi.util.sdp
 
@@ -36,7 +38,8 @@ fun EmotionBar(
             modifier = Modifier
                 .weight(1f)
                 .height(sdp(8.dp))
-                .clip(RoundedCornerShape(sdp(4.dp))),
+                .clip(RoundedCornerShape(sdp(4.dp)))
+                .semantics { contentDescription = "$label $value%" },
             color = color,
             trackColor = MaterialTheme.colorScheme.surfaceVariant,
         )

@@ -226,7 +226,7 @@ fun MemoryListScreen(
                                 val expanded = expandedMemoryIds.contains(memory.id)
                                 Text(
                                     text = memory.content,
-                                    maxLines = if (isLong && !expanded) 4 else Int.MAX_VALUE,
+                                    maxLines = if (isLong && !expanded) 4 else 50,  // 50 行足够覆盖 99.9% 的记忆，避免极长内容撑爆屏幕
                                     modifier = if (isLong) Modifier.clickable {
                                         expandedMemoryIds = if (expanded) expandedMemoryIds - memory.id
                                         else expandedMemoryIds + memory.id

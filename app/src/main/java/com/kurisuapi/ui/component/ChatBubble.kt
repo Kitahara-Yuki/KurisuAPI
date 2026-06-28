@@ -15,6 +15,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -60,7 +61,7 @@ fun ChatBubble(
             .format(timeFormat)
     }
 
-    var thinkingExpanded by remember { mutableStateOf(false) }
+    var thinkingExpanded by rememberSaveable { mutableStateOf(false) }
     val hasThinking = !isUser && message.reasoningContent.isNotBlank()
 
     Column(

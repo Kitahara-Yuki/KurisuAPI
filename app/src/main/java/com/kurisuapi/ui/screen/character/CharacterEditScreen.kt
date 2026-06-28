@@ -10,7 +10,9 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Modifier
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.kurisuapi.ui.viewmodel.CharacterViewModel
@@ -117,7 +119,7 @@ fun CharacterEditScreen(
                 modifier = Modifier.fillMaxWidth()
             )
             OutlinedTextField(value = gender, onValueChange = { gender = it }, label = { Text("性别") }, modifier = Modifier.fillMaxWidth())
-            OutlinedTextField(value = age, onValueChange = { age = it }, label = { Text("年龄") }, modifier = Modifier.fillMaxWidth())
+            OutlinedTextField(value = age, onValueChange = { age = it }, label = { Text("年龄") }, modifier = Modifier.fillMaxWidth(), keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number))
             OutlinedTextField(value = personality, onValueChange = { personality = it }, label = { Text("性格") }, placeholder = { Text("定义角色的性格特征，影响 AI 回复的语气和态度") }, modifier = Modifier.fillMaxWidth(), minLines = 2)
             OutlinedTextField(value = appearance, onValueChange = { appearance = it }, label = { Text("外观") }, placeholder = { Text("描述角色的外貌特征，如发型、瞳色、体型、穿着等") }, modifier = Modifier.fillMaxWidth(), minLines = 2)
             OutlinedTextField(value = speakingStyle, onValueChange = { speakingStyle = it }, label = { Text("说话风格") }, placeholder = { Text("定义角色的说话方式和用词习惯") }, modifier = Modifier.fillMaxWidth(), minLines = 2)

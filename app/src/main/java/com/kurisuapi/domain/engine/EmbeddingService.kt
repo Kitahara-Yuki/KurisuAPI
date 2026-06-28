@@ -94,16 +94,20 @@ class EmbeddingService @Inject constructor(
      * 加载 SQLite-Vector 扩展到指定的 SQLiteDatabase 连接。
      * 用于在 Room 之外的独立连接中执行向量操作。
      */
+    // 防止重复加载 native 库（第二次调用会抛 UnsatisfiedLinkError）
+    private var vectorLibLoaded = false
+
     fun loadVectorExtension(databasePath: String): SQLiteDatabase? {
         return try {
+            if (!vectorLibLoaded) {
+                System.loadLibrary("sqlite-vector")
+                vectorLibLoaded = true
+            }
             val db = SQLiteDatabase.openDatabase(
                 databasePath,
                 null,
                 SQLiteDatabase.OPEN_READONLY
             )
-            // SQLite-Vector 扩展通过 sqlite3_load_extension 加载
-            // 在 Android 上需要使用 System.loadLibrary 预加载
-            System.loadLibrary("sqlite-vector")
             db
         } catch (e: Exception) {
             null

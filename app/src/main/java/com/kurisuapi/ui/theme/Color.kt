@@ -66,4 +66,4 @@ val md_theme_dark_error = Color(0xFFFF6961)
 val md_theme_dark_onError = Color(0xFF5C0000)
 val md_theme_dark_errorContainer = Color(0xFF8C000A)
 val md_theme_dark_onErrorContainer = Color(0xFFFFE5E5)
-val md_theme_dark_outline = Color(0x1AFFFFFF)
+val md_theme_dark_outline = Color(0x33FFFFFF)  // 20% 白，深色模式可见边框

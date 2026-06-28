@@ -30,10 +30,8 @@ interface MemoryDao {
     @Query("SELECT * FROM memories WHERE characterId = :characterId AND isDeleted = 0 ORDER BY updatedAt ASC")
     suspend fun getAllByCharacter(characterId: Long): List<MemoryEntity>
 
-    @Transaction
-    suspend fun updateAll(memories: List<MemoryEntity>) {
-        memories.forEach { update(it) }
-    }
+    @Update
+    suspend fun updateAll(memories: List<MemoryEntity>)
 
     // === 软删除 ===
     @Query("UPDATE memories SET isDeleted = 1, deletedAt = :deletedAt WHERE sessionId = :sessionId AND sessionId > 0")
