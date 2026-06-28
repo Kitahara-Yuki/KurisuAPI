@@ -1,7 +1,6 @@
 package com.kurisuapi.data.entity
 
 import androidx.room.Entity
-import androidx.room.ForeignKey
 import androidx.room.Index
 import androidx.room.PrimaryKey
 
@@ -10,20 +9,6 @@ import androidx.room.PrimaryKey
     indices = [
         Index(value = ["characterId"]),
         Index(value = ["folderId"])
-    ],
-    foreignKeys = [
-        ForeignKey(
-            entity = CharacterEntity::class,
-            parentColumns = ["id"],
-            childColumns = ["characterId"],
-            onDelete = ForeignKey.CASCADE
-        ),
-        ForeignKey(
-            entity = ConversationFolderEntity::class,
-            parentColumns = ["id"],
-            childColumns = ["folderId"],
-            onDelete = ForeignKey.SET_NULL
-        )
     ]
 )
 data class ConversationSessionEntity(
