@@ -94,8 +94,9 @@ class EncryptedSettings @Inject constructor(
                     _prefs = null
                 }
                 prefs.edit().putString(key, value).apply()
-            } catch (_: Exception) {
-                // 两次都失败则放弃写入
+            } catch (e2: Exception) {
+                // 两次都失败：记录错误，让调用方知道写入未生效
+                android.util.Log.e("EncryptedSettings", "加密写入两次均失败，KeyStore 可能损坏: key=$key", e2)
             }
         }
     }

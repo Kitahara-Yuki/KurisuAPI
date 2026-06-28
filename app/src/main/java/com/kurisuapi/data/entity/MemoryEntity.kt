@@ -1,12 +1,27 @@
 package com.kurisuapi.data.entity
 
 import androidx.room.Entity
+import androidx.room.ForeignKey
 import androidx.room.Index
 import androidx.room.PrimaryKey
 
 @Entity(
     tableName = "memories",
-    indices = [Index(value = ["characterId"])]
+    indices = [Index(value = ["characterId"])],
+    foreignKeys = [
+        ForeignKey(
+            entity = CharacterEntity::class,
+            parentColumns = ["id"],
+            childColumns = ["characterId"],
+            onDelete = ForeignKey.CASCADE
+        ),
+        ForeignKey(
+            entity = ConversationSessionEntity::class,
+            parentColumns = ["id"],
+            childColumns = ["sessionId"],
+            onDelete = ForeignKey.CASCADE
+        )
+    ]
 )
 data class MemoryEntity(
     @PrimaryKey(autoGenerate = true)

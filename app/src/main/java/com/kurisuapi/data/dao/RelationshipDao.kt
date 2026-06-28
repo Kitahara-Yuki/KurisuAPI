@@ -1,5 +1,6 @@
 package com.kurisuapi.data.dao
 
+import android.database.sqlite.SQLiteConstraintException
 import androidx.room.*
 import com.kurisuapi.data.entity.RelationshipEntity
 import kotlinx.coroutines.flow.Flow
@@ -14,6 +15,7 @@ interface RelationshipDao {
 
     /**
      * 如果 characterId 已有记录则更新（保留原 id），否则插入新记录。
+     * 并发安全：insert 失败时捕获 UNIQUE 约束冲突并重试查询→更新。
      */
     @Transaction
     suspend fun insertOrUpdate(relationship: RelationshipEntity) {
@@ -21,7 +23,15 @@ interface RelationshipDao {
         if (existing != null) {
             update(relationship.copy(id = existing.id))
         } else {
-            insert(relationship)
+            try {
+                insert(relationship)
+            } catch (_: SQLiteConstraintException) {
+                // 并发时另一协程已插入，重新查询后更新
+                val race = getByCharacterOnce(relationship.characterId)
+                if (race != null) {
+                    update(relationship.copy(id = race.id))
+                }
+            }
         }
     }
 

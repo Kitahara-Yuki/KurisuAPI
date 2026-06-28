@@ -1,6 +1,7 @@
 package com.kurisuapi.data.entity
 
 import androidx.room.Entity
+import androidx.room.ForeignKey
 import androidx.room.Index
 import androidx.room.PrimaryKey
 
@@ -11,6 +12,20 @@ import androidx.room.PrimaryKey
         Index(value = ["sessionId"]),
         Index(value = ["characterId", "timestamp"]),
         Index(value = ["sessionId", "timestamp"])
+    ],
+    foreignKeys = [
+        ForeignKey(
+            entity = CharacterEntity::class,
+            parentColumns = ["id"],
+            childColumns = ["characterId"],
+            onDelete = ForeignKey.CASCADE
+        ),
+        ForeignKey(
+            entity = ConversationSessionEntity::class,
+            parentColumns = ["id"],
+            childColumns = ["sessionId"],
+            onDelete = ForeignKey.CASCADE
+        )
     ]
 )
 data class ChatHistoryEntity(

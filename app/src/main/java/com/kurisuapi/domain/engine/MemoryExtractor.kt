@@ -64,8 +64,15 @@ class MemoryExtractor @Inject constructor(
      */
     suspend fun extractAndStore(characterId: Long, sessionId: Long = 0): Boolean = withContext(Dispatchers.IO) {
         if (characterId <= 0) return@withContext false
-        extractMutex.withLock {
-            doExtractAndStore(characterId, sessionId)
+        try {
+            kotlinx.coroutines.withTimeout(120_000L) {
+                extractMutex.withLock {
+                    doExtractAndStore(characterId, sessionId)
+                }
+            }
+        } catch (_: kotlinx.coroutines.TimeoutCancellationException) {
+            Log.w(TAG, "记忆提取总超时（120s），本次跳过")
+            false
         }
     }
 
@@ -170,7 +177,9 @@ class MemoryExtractor @Inject constructor(
                     // 单批失败不阻塞其他批
                 }
                 processed += batch.size
-                onProgress?.invoke(processed.coerceAtMost(total), total)
+                withContext(Dispatchers.Main) {
+                    onProgress?.invoke(processed.coerceAtMost(total), total)
+                }
             }
 
             if (allUpdated.isNotEmpty()) {

@@ -260,6 +260,8 @@ class AiService @Inject constructor(
                 is OpenAiCompatibleProvider -> aiProvider.embed(text, apiKey, provider.baseUrl)
                 else -> null // Anthropic/Gemini embedding 暂不支持
             }
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             Log.w("AiService", "Embedding failed: ${e.message}")
             null

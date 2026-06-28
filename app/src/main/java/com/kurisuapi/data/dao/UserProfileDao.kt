@@ -1,5 +1,6 @@
 package com.kurisuapi.data.dao
 
+import android.database.sqlite.SQLiteConstraintException
 import androidx.room.*
 import com.kurisuapi.data.entity.UserProfileEntity
 import kotlinx.coroutines.flow.Flow
@@ -14,7 +15,7 @@ interface UserProfileDao {
 
     /**
      * 如果 characterId 已有记录则更新（保留原 id），否则插入新记录。
-     * 与 EmotionStateDao 一致：不用 @Insert(REPLACE)，避免 autoGenerate PK(0) 产生重复行。
+     * 并发安全：insert 失败时捕获 UNIQUE 约束冲突并重试查询→更新。
      */
     @Transaction
     suspend fun insertOrUpdate(profile: UserProfileEntity) {
@@ -22,7 +23,15 @@ interface UserProfileDao {
         if (existing != null) {
             update(profile.copy(id = existing.id))
         } else {
-            insert(profile)
+            try {
+                insert(profile)
+            } catch (_: SQLiteConstraintException) {
+                // 并发时另一协程已插入，重新查询后更新
+                val race = getByCharacterOnce(profile.characterId)
+                if (race != null) {
+                    update(profile.copy(id = race.id))
+                }
+            }
         }
     }
 

@@ -1,5 +1,6 @@
 package com.kurisuapi.data.dao
 
+import android.database.sqlite.SQLiteConstraintException
 import androidx.room.*
 import com.kurisuapi.data.entity.EmotionStateEntity
 import kotlinx.coroutines.flow.Flow
@@ -14,8 +15,7 @@ interface EmotionStateDao {
 
     /**
      * 如果 characterId 已有记录则更新（保留原 id），否则插入新记录。
-     * 不使用 @Insert(REPLACE)，因为 autoGenerate 的 PrimaryKey(0)
-     * 不会与已有行冲突，导致产生重复行。
+     * 并发安全：insert 失败时捕获 UNIQUE 约束冲突并重试查询→更新。
      */
     @Transaction
     suspend fun insertOrUpdate(emotion: EmotionStateEntity) {
@@ -23,7 +23,15 @@ interface EmotionStateDao {
         if (existing != null) {
             update(emotion.copy(id = existing.id))
         } else {
-            insert(emotion)
+            try {
+                insert(emotion)
+            } catch (_: SQLiteConstraintException) {
+                // 并发时另一协程已插入，重新查询后更新
+                val race = getByCharacterOnce(emotion.characterId)
+                if (race != null) {
+                    update(emotion.copy(id = race.id))
+                }
+            }
         }
     }
 
