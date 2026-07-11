@@ -18,10 +18,14 @@ import com.kurisuapi.data.entity.*
         UserProfileEntity::class,
         ConversationSessionEntity::class,
         ConversationFolderEntity::class,
-        ConversationIndexEntity::class
+        ConversationIndexEntity::class,
+        ProactiveLogEntity::class,
+        CacheDailyStatsEntity::class,
+        DiaryEntryEntity::class,
+        ThemeEntity::class
     ],
-    version = 23,
-    exportSchema = false
+    version = 36,
+    exportSchema = true  // 导出 schema JSON，支持迁移测试验证
 )
 abstract class KurisuDatabase : RoomDatabase() {
     abstract fun characterDao(): CharacterDao
@@ -36,4 +40,8 @@ abstract class KurisuDatabase : RoomDatabase() {
     abstract fun conversationSessionDao(): ConversationSessionDao
     abstract fun conversationFolderDao(): ConversationFolderDao
     abstract fun conversationIndexDao(): ConversationIndexDao
+    abstract fun proactiveLogDao(): ProactiveLogDao
+    abstract fun cacheStatsDao(): CacheStatsDao
+    abstract fun diaryEntryDao(): DiaryEntryDao
+    abstract fun themeDao(): ThemeDao
 }

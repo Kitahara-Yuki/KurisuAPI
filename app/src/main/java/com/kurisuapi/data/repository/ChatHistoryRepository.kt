@@ -37,4 +37,8 @@ class ChatHistoryRepository @Inject constructor(
     suspend fun deleteBySession(sessionId: Long) = chatHistoryDao.deleteBySession(sessionId)
 
     suspend fun deleteById(id: Long) = chatHistoryDao.deleteById(id)
+
+    /** 查询某角色在指定时间范围内的消息 */
+    suspend fun getByCharacterAndDateRange(characterId: Long, startOfDay: Long, endOfDay: Long): List<ChatHistoryEntity> =
+        chatHistoryDao.getByCharacterAndDateRange(characterId, startOfDay, endOfDay)
 }

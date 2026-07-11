@@ -200,7 +200,11 @@ class GeminiProvider(
             val response = streamClient.newCall(httpRequest).execute()
             response.use { resp ->
                 if (resp.code !in 200..299) {
-                    throw RuntimeException("Gemini 流式请求失败 (${resp.code})")
+                    // Bug 3 fix: 读取 API 返回的详细错误信息，而非仅状态码
+                    val errorBody = try {
+                        resp.peekBody(1024).string()
+                    } catch (_: Exception) { "" }
+                    throw RuntimeException("Gemini 流式请求失败 (${resp.code})${if (errorBody.isNotBlank()) ": $errorBody" else ""}")
                 }
                 val source = resp.body?.source() ?: return@use
                 source.timeout().timeout(streamTimeoutMs, java.util.concurrent.TimeUnit.MILLISECONDS)

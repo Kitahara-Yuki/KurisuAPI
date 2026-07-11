@@ -32,6 +32,9 @@ fun MemoryListScreen(
     val isOptimizing by viewModel.isOptimizing.collectAsState()
     val optimizeProgress by viewModel.optimizeProgress.collectAsState()
     val message by viewModel.message.collectAsState()
+    val searchQuery by viewModel.searchQuery.collectAsState()
+    val searchResults by viewModel.searchResults.collectAsState()
+    val isSearching by viewModel.isSearching.collectAsState()
     var showAddDialog by remember { mutableStateOf(false) }
     var editingMemory by remember { mutableStateOf<MemoryEntity?>(null) }
     var profileExpanded by remember { mutableStateOf(false) }
@@ -44,6 +47,10 @@ fun MemoryListScreen(
     var expandedMemoryIds by remember { mutableStateOf<Set<Long>>(emptySet()) }
     val sessionTitles by viewModel.sessionTitles.collectAsState()
     val snackbarHostState = remember { SnackbarHostState() }
+    var searchText by remember { mutableStateOf("") }
+
+    // 记忆列表：搜索时显示搜索结果，否则显示完整列表
+    val displayMemories = if (isSearching) (searchResults ?: memories) else memories
 
     LaunchedEffect(characterId) {
         viewModel.setCharacterId(characterId)
@@ -76,18 +83,11 @@ fun MemoryListScreen(
                         ) { Text("删除 (${selectedIds.size})") }
                         TextButton(onClick = { selectedIds = emptySet() }) { Text("取消") }
                     },
-                    colors = TopAppBarDefaults.topAppBarColors(
-                        containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.92f)
-                    )
+                    colors = com.kurisuapi.ui.theme.topBarColors()
                 )
             } else {
                 TopAppBar(
                     title = { Text("记忆管理", fontWeight = FontWeight.SemiBold) },
-                    navigationIcon = {
-                        IconButton(onClick = onNavigateBack) {
-                            Icon(Icons.Outlined.ArrowBack, contentDescription = "返回")
-                        }
-                    },
                     actions = {
                         if (isOptimizing) {
                             Row(
@@ -109,9 +109,7 @@ fun MemoryListScreen(
                             }
                         }
                     },
-                    colors = TopAppBarDefaults.topAppBarColors(
-                        containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.92f)
-                    )
+                    colors = com.kurisuapi.ui.theme.topBarColors()
                 )
             }
         },
@@ -189,7 +187,44 @@ fun MemoryListScreen(
                 )
             }
 
-            if (memories.isEmpty()) {
+            // 搜索栏
+            item {
+                OutlinedTextField(
+                    value = searchText,
+                    onValueChange = { text ->
+                        searchText = text
+                        viewModel.search(text)
+                    },
+                    placeholder = { Text("搜索记忆...") },
+                    leadingIcon = { Icon(Icons.Outlined.Search, contentDescription = null) },
+                    trailingIcon = {
+                        if (searchText.isNotEmpty()) {
+                            IconButton(onClick = {
+                                searchText = ""
+                                viewModel.clearSearch()
+                            }) {
+                                Icon(Icons.Outlined.Close, contentDescription = "清除搜索")
+                            }
+                        }
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true,
+                    shape = MaterialTheme.shapes.medium
+                )
+            }
+
+            if (isSearching && searchResults != null && searchResults!!.isEmpty()) {
+                item {
+                    Box(
+                        modifier = Modifier.fillMaxWidth().padding(vertical = sdp(16.dp)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text("未找到匹配的记忆", color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f))
+                    }
+                }
+            }
+
+            if (memories.isEmpty() && !isSearching) {
                 item {
                     Box(
                         modifier = Modifier.fillMaxWidth().padding(vertical = sdp(32.dp)),
@@ -198,8 +233,8 @@ fun MemoryListScreen(
                         Text("暂无记忆", color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f))
                     }
                 }
-            } else {
-                items(memories, key = { it.id }) { memory ->
+            } else if (displayMemories.isNotEmpty()) {
+                items(displayMemories, key = { it.id }) { memory ->
                     val isSelected = selectedIds.contains(memory.id)
                     val isSelectionMode = selectedIds.isNotEmpty()
                     Card(
@@ -299,6 +334,9 @@ fun MemoryListScreen(
         var batchAssignTargetId by remember { mutableStateOf(0L) }
         AlertDialog(
             onDismissRequest = { showBatchAssignDialog = false },
+            containerColor = MaterialTheme.colorScheme.surface,
+            titleContentColor = MaterialTheme.colorScheme.onSurface,
+            textContentColor = MaterialTheme.colorScheme.onSurfaceVariant,
             title = { Text("将 ${selectedIds.size} 条记忆分配到对话") },
             text = {
                 if (titles.isEmpty()) {
@@ -331,6 +369,9 @@ fun MemoryListScreen(
     memoryToDelete?.let { memory ->
         AlertDialog(
             onDismissRequest = { memoryToDelete = null },
+            containerColor = MaterialTheme.colorScheme.surface,
+            titleContentColor = MaterialTheme.colorScheme.onSurface,
+            textContentColor = MaterialTheme.colorScheme.onSurfaceVariant,
             icon = { Icon(Icons.Outlined.Warning, contentDescription = null, tint = MaterialTheme.colorScheme.error) },
             title = { Text("删除记忆") },
             text = { Text("确定删除这条记忆？\n\n「${memory.content.take(50)}」\n\n此操作无法恢复。") },
@@ -347,6 +388,9 @@ fun MemoryListScreen(
     if (showBatchDeleteDialog) {
         AlertDialog(
             onDismissRequest = { showBatchDeleteDialog = false },
+            containerColor = MaterialTheme.colorScheme.surface,
+            titleContentColor = MaterialTheme.colorScheme.onSurface,
+            textContentColor = MaterialTheme.colorScheme.onSurfaceVariant,
             icon = { Icon(Icons.Outlined.Warning, contentDescription = null, tint = MaterialTheme.colorScheme.error) },
             title = { Text("批量删除") },
             text = { Text("确定永久删除选中的 ${selectedIds.size} 条记忆？\n此操作无法恢复。") },
@@ -377,6 +421,9 @@ fun MemoryListScreen(
         var selectedId by remember { mutableStateOf(0L) }
         AlertDialog(
             onDismissRequest = { assignMemory = null },
+            containerColor = MaterialTheme.colorScheme.surface,
+            titleContentColor = MaterialTheme.colorScheme.onSurface,
+            textContentColor = MaterialTheme.colorScheme.onSurfaceVariant,
             title = { Text("选择所属对话") },
             text = {
                 if (titles.isEmpty()) {
@@ -434,6 +481,9 @@ private fun MemoryDialog(
     var importance by remember { mutableStateOf(initialImportance.toFloat()) }
     AlertDialog(
         onDismissRequest = onDismiss,
+        containerColor = MaterialTheme.colorScheme.surface,
+        titleContentColor = MaterialTheme.colorScheme.onSurface,
+        textContentColor = MaterialTheme.colorScheme.onSurfaceVariant,
         title = { Text(title) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(sdp(12.dp))) {

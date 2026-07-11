@@ -5,6 +5,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.ArrowBack
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -22,6 +23,7 @@ fun EmotionDetailScreen(
     viewModel: EmotionDetailViewModel = hiltViewModel()
 ) {
     val emotion by viewModel.emotion.collectAsState()
+    val isLoaded by viewModel.isLoaded.collectAsState()
 
     Scaffold(
         topBar = {
@@ -32,13 +34,16 @@ fun EmotionDetailScreen(
                         Icon(Icons.Outlined.ArrowBack, contentDescription = "返回")
                     }
                 },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.92f)
-                )
+                colors = com.kurisuapi.ui.theme.topBarColors()
             )
         }
     ) { paddingValues ->
-        emotion?.let { e ->
+        val currentEmotion = emotion
+        if (!isLoaded) {
+            Box(modifier = Modifier.fillMaxSize().padding(paddingValues), contentAlignment = Alignment.Center) {
+                CircularProgressIndicator()
+            }
+        } else if (currentEmotion != null) {
             Column(
                 modifier = Modifier
                     .fillMaxSize()
@@ -56,11 +61,11 @@ fun EmotionDetailScreen(
                     shape = MaterialTheme.shapes.medium
                 ) {
                     Column(modifier = Modifier.padding(sdp(16.dp)), verticalArrangement = Arrangement.spacedBy(sdp(8.dp))) {
-                        EmotionBar(label = "开心", value = e.happy, color = AppleGreen)
-                        EmotionBar(label = "难过", value = e.sad, color = AppleBlue)
-                        EmotionBar(label = "生气", value = e.angry, color = AppleRed)
-                        EmotionBar(label = "孤独", value = e.lonely, color = AppleIndigo)
-                        EmotionBar(label = "好感", value = e.affection, color = ApplePink)
+                        EmotionBar(label = "开心", value = currentEmotion.happy, color = AppleGreen)
+                        EmotionBar(label = "难过", value = currentEmotion.sad, color = AppleBlue)
+                        EmotionBar(label = "生气", value = currentEmotion.angry, color = AppleRed)
+                        EmotionBar(label = "孤独", value = currentEmotion.lonely, color = AppleIndigo)
+                        EmotionBar(label = "好感", value = currentEmotion.affection, color = ApplePink)
                     }
                 }
 
@@ -81,8 +86,16 @@ fun EmotionDetailScreen(
                     }
                 }
             }
-        } ?: Box(modifier = Modifier.fillMaxSize().padding(paddingValues)) {
-            Text("加载中...")
+        } else {
+            Box(modifier = Modifier.fillMaxSize().padding(paddingValues), contentAlignment = Alignment.Center) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text("暂无情绪数据", style = MaterialTheme.typography.bodyLarge,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f))
+                    Spacer(modifier = Modifier.height(sdp(8.dp)))
+                    Text("与角色开始聊天后会自动生成", style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.3f))
+                }
+            }
         }
     }
 }

@@ -8,13 +8,17 @@ val AppleGreen = Color(0xFF34C759)
 val AppleOrange = Color(0xFFFF9500)
 val AppleRed = Color(0xFFFF3B30)
 val AppleGray = Color(0xFF8E8E93)
-val ApplePink = Color(0xFFFF2D55)
+val ApplePink = Color(0xFFFF6482) // dark mode pink
 val AppleTeal = Color(0xFF5AC8FA)
 val AppleIndigo = Color(0xFF5856D6)
 
+// 主题预设专用色
+val SakuraPink = Color(0xFFD97757)
+val SunsetOrange = Color(0xFFE06A1B)
+
 // Glassmorphism overlay colors
 val GlassWhite = Color(0xCCFFFFFF) // rgba(255,255,255,0.80) — light mode card
-val GlassDark = Color(0xCC1C1C1E)  // rgba(28,28,30,0.80) — dark mode card
+
 val GlassBorderLight = Color(0x33FFFFFF) // subtle white border
 val GlassBorderDark = Color(0x1AFFFFFF)  // very subtle border for dark
 
@@ -43,27 +47,28 @@ val md_theme_light_errorContainer = Color(0xFFFFE5E5)
 val md_theme_light_onErrorContainer = Color(0xFF5C0000)
 val md_theme_light_outline = Color(0x33000000)
 
-// Dark Theme
-val md_theme_dark_primary = Color(0xFF5EACFF)
-val md_theme_dark_onPrimary = Color(0xFF001D34)
-val md_theme_dark_primaryContainer = Color(0xFF004B87)
-val md_theme_dark_onPrimaryContainer = Color(0xFFE3F2FF)
-val md_theme_dark_secondary = Color(0xFFC7C7CC)
-val md_theme_dark_onSecondary = Color(0xFF1C1C1E)
+// Dark Theme — 主题色与浅色统一，容器色做深色适配
+val md_theme_dark_primary = AppleBlue
+val md_theme_dark_onPrimary = Color.White
+val md_theme_dark_primaryContainer = Color(0xFF003258)
+val md_theme_dark_onPrimaryContainer = Color(0xFFD0E4FF)
+val md_theme_dark_secondary = Color(0xFF8E8E93)
+val md_theme_dark_onSecondary = Color.White
 val md_theme_dark_secondaryContainer = Color(0xFF3A3A3C)
-val md_theme_dark_onSecondaryContainer = Color(0xFFF2F2F7)
-val md_theme_dark_tertiary = Color(0xFFFFB84D)
-val md_theme_dark_onTertiary = Color(0xFF3D1D00)
-val md_theme_dark_tertiaryContainer = Color(0xFF663200)
-val md_theme_dark_onTertiaryContainer = Color(0xFFFFF3E0)
-val md_theme_dark_background = Color(0xFF000000) // iOS dark background
+val md_theme_dark_onSecondaryContainer = Color(0xFFE8E8ED)
+val md_theme_dark_tertiary = AppleOrange
+val md_theme_dark_onTertiary = Color.White
+val md_theme_dark_tertiaryContainer = Color(0xFF4A2500)
+val md_theme_dark_onTertiaryContainer = Color(0xFFFFDCC2)
+val md_theme_dark_error = AppleRed
+val md_theme_dark_onError = Color.White
+val md_theme_dark_errorContainer = Color(0xFF4A1515)
+val md_theme_dark_onErrorContainer = Color(0xFFFFDAD6)
+// 以下为模式色 — 深色模式该有的暗色
+val md_theme_dark_background = Color(0xFF0A0A0C)
 val md_theme_dark_onBackground = Color(0xFFF2F2F7)
-val md_theme_dark_surface = GlassDark
+val md_theme_dark_surface = Color(0xFF1C1C1E)
 val md_theme_dark_onSurface = Color(0xFFF2F2F7)
-val md_theme_dark_surfaceVariant = Color(0xCC1C1C1E)
+val md_theme_dark_surfaceVariant = Color(0xFF2C2C2E)
 val md_theme_dark_onSurfaceVariant = Color(0xFFC7C7CC)
-val md_theme_dark_error = Color(0xFFFF6961)
-val md_theme_dark_onError = Color(0xFF5C0000)
-val md_theme_dark_errorContainer = Color(0xFF8C000A)
-val md_theme_dark_onErrorContainer = Color(0xFFFFE5E5)
-val md_theme_dark_outline = Color(0x33FFFFFF)  // 20% 白，深色模式可见边框
+val md_theme_dark_outline = Color(0x1AFFFFFF)

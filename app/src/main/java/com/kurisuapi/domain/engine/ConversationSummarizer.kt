@@ -104,16 +104,10 @@ class ConversationSummarizer @Inject constructor(
         }
 
         val response = try {
-            val bgModel = settingsRepository.getBackgroundModel()
-            kotlinx.coroutines.withTimeout(60_000L) {
-                aiService.chat(listOf(
-                    ChatMessage(role = "system", content = systemPrompt),
-                    ChatMessage(role = "user", content = userPrompt)
-                ), modelOverride = bgModel.ifBlank { null })
-            }
-        } catch (e: kotlinx.coroutines.TimeoutCancellationException) {
-            Log.w(TAG, "摘要 LLM 调用超时（60s）")
-            return
+            aiService.chat(listOf(
+                ChatMessage(role = "system", content = systemPrompt),
+                ChatMessage(role = "user", content = userPrompt)
+            ), modelOverride = null)
         } catch (e: Exception) {
             Log.e(TAG, "摘要 LLM 调用失败", e)
             return

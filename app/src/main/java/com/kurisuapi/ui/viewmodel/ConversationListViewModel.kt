@@ -31,6 +31,17 @@ class ConversationListViewModel @Inject constructor(
 
     private val _characterId = MutableStateFlow(0L)
     private val _selectedFolderId = MutableStateFlow<Long?>(null)
+    private val _hideModeLabels = MutableStateFlow(false)
+
+    val hideModeLabels: StateFlow<Boolean> = _hideModeLabels.asStateFlow()
+
+    fun toggleHideModeLabels() {
+        val newValue = !_hideModeLabels.value
+        _hideModeLabels.value = newValue
+        viewModelScope.launch {
+            settingsRepository.setHideModeLabels(newValue)
+        }
+    }
 
     val sessions: StateFlow<List<ConversationSessionEntity>> = _characterId
         .flatMapLatest { id ->
@@ -94,6 +105,8 @@ class ConversationListViewModel @Inject constructor(
     fun loadCharacter(characterId: Long) {
         _characterId.value = characterId
         viewModelScope.launch {
+            // 加载用户偏好：模式标签显示/隐藏
+            _hideModeLabels.value = settingsRepository.isHideModeLabels()
             ensureArchiveFolder(characterId)
             // 对旧数据迁移：所有标题为"默认对话"的会话，自动使用第一条用户消息作为标题
             autoTitleLegacySessions(characterId)
@@ -110,7 +123,8 @@ class ConversationListViewModel @Inject constructor(
     private suspend fun purgeOrphanedMemories(characterId: Long) {
         try {
             val validIds = sessionRepository.getAllActiveIds(characterId)
-            memoryRepository.purgeOrphanedMemories(validIds)
+            // Bug fix: 传入 characterId 防止跨角色记忆被误删
+            memoryRepository.purgeOrphanedMemories(characterId, validIds)
         } catch (_: Exception) { }
     }
 
@@ -220,9 +234,6 @@ class ConversationListViewModel @Inject constructor(
     /** 永久删除指定会话及其所有关联数据（聊天记录、索引、记忆） */
     fun permanentlyDeleteSession(sessionId: Long) {
         viewModelScope.launch {
-            chatHistoryRepository.deleteBySession(sessionId)
-            indexRepository.deleteBySession(sessionId)
-            memoryRepository.deleteBySessionPhysically(sessionId)
             sessionRepository.deleteById(sessionId)
         }
     }
@@ -237,6 +248,7 @@ class ConversationListViewModel @Inject constructor(
             for (session in expiredSessions) {
                 if (session.deletedAt > 0 && session.deletedAt < cutoff) {
                     chatHistoryRepository.deleteBySession(session.id)
+                    indexRepository.deleteBySession(session.id)
                 }
             }
             // 再删除过期会话和过期记忆

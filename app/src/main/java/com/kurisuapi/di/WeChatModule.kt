@@ -1,5 +1,6 @@
 package com.kurisuapi.di
 
+import android.content.Context
 import com.google.gson.GsonBuilder
 import com.kurisuapi.BuildConfig
 import com.kurisuapi.data.wechat.WeChatApiService
@@ -7,7 +8,9 @@ import com.kurisuapi.data.wechat.WeChatRepository
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
+import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.hilt.components.SingletonComponent
+import okhttp3.Cache
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.Interceptor
 import okhttp3.OkHttpClient
@@ -15,6 +18,7 @@ import okhttp3.logging.HttpLoggingInterceptor
 import retrofit2.Retrofit
 import retrofit2.converter.gson.GsonConverterFactory
 import retrofit2.converter.scalars.ScalarsConverterFactory
+import java.io.File
 import java.util.concurrent.TimeUnit
 import javax.inject.Named
 import javax.inject.Singleton
@@ -26,7 +30,10 @@ object WeChatModule {
     @Provides
     @Singleton
     @Named("wechat")
-    fun provideWeChatOkHttpClient(weChatRepository: WeChatRepository): OkHttpClient {
+    fun provideWeChatOkHttpClient(
+        weChatRepository: WeChatRepository,
+        @ApplicationContext context: Context
+    ): OkHttpClient {
         // Bug 6 fix: 动态替换 base URL，支持微信服务器重定向
         val redirectInterceptor = Interceptor { chain ->
             val originalRequest = chain.request()
@@ -47,7 +54,11 @@ object WeChatModule {
             chain.proceed(originalRequest)
         }
 
+        val cacheDir = File(context.cacheDir, "okhttp_wechat_cache")
+        val cache = Cache(cacheDir, 5L * 1024 * 1024) // 5 MB
+
         return OkHttpClient.Builder()
+            .cache(cache)
             .connectTimeout(30, TimeUnit.SECONDS)
             .readTimeout(45, TimeUnit.SECONDS)
             .writeTimeout(30, TimeUnit.SECONDS)

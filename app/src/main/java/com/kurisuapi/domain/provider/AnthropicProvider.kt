@@ -72,7 +72,7 @@ class AnthropicProvider(
                         "type" to "enabled",
                         "budget_tokens" to budget
                     )
-                    // 按照 Anthropic 官方要求：Enalbed thinking 应该省略 temperature
+                    // 按照 Anthropic 官方要求：Enabled thinking 应该省略 temperature
                     // 为减少误解先保留：think 开启时 temperature 其实也该删掉
                 } else {
                     requestBody["temperature"] = temperature
@@ -201,7 +201,11 @@ class AnthropicProvider(
             val response = streamClient.newCall(httpRequest).execute()
             response.use { resp ->
                 if (resp.code !in 200..299) {
-                    throw RuntimeException("Anthropic 流式请求失败 (${resp.code})")
+                    // Bug 3 fix: 读取 API 返回的详细错误信息，而非仅状态码
+                    val errorBody = try {
+                        resp.peekBody(1024).string()
+                    } catch (_: Exception) { "" }
+                    throw RuntimeException("Anthropic 流式请求失败 (${resp.code})${if (errorBody.isNotBlank()) ": $errorBody" else ""}")
                 }
                 val source = resp.body?.source() ?: return@use
                 source.timeout().timeout(streamTimeoutMs, java.util.concurrent.TimeUnit.MILLISECONDS)

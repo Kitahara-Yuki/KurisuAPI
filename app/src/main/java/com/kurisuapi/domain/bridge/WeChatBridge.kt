@@ -40,6 +40,7 @@ class WeChatBridge @Inject constructor(
     private val relationshipEngine: RelationshipEngine,
     private val promptBuilder: PromptBuilder,
     private val aiService: AiService,
+    private val chatOutputFilter: com.kurisuapi.domain.engine.ChatOutputFilter,
     private val memoryExtractor: com.kurisuapi.domain.engine.MemoryExtractor,
     private val conversationSummarizer: com.kurisuapi.domain.engine.ConversationSummarizer
 ) : MessageBridge {
@@ -574,8 +575,12 @@ class WeChatBridge @Inject constructor(
      * 处理自动回复：读取活跃角色 → 保存用户消息 → 更新情绪/关系 → 构建 prompt → 调用 AI → 保存回复 → 发送回复
      */
     private suspend fun handleAutoReply(incoming: IncomingMessage) {
+        val botToken = weChatRepository.botToken ?: return
+        var aiSuccess = false
+        var filteredContent = ""
+        var outTypingTicket: String? = null
+
         replyMutex.withLock {
-            val botToken = weChatRepository.botToken ?: return@withLock
             // 1. 获取活跃角色
             var activeCharacterId = settingsRepository.getActiveCharacterId()
             var character = if (activeCharacterId != null && activeCharacterId > 0) {
@@ -628,6 +633,8 @@ class WeChatBridge @Inject constructor(
             // 引擎失败时使用默认情绪/关系值，不阻断聊天
             // 聊天模式从 session 实体读取，每个对话独立
             val ctxWindow = aiService.getActiveContextWindow()
+            val chatMode = sessionRepository.getById(sessionId)?.chatMode
+                ?: com.kurisuapi.data.entity.ConversationSessionEntity.CHAT_MODE_CHAT
             val promptMessages = promptBuilder.buildMessages(
                 character = character,
                 emotion = emotionResult ?: com.kurisuapi.data.entity.EmotionStateEntity(characterId = character.id),
@@ -635,7 +642,7 @@ class WeChatBridge @Inject constructor(
                 sessionId = sessionId,
                 userMessage = incoming.content,
                 contextWindow = ctxWindow,
-                chatMode = sessionRepository.getById(sessionId)?.chatMode ?: com.kurisuapi.data.entity.ConversationSessionEntity.CHAT_MODE_CHAT,
+                chatMode = chatMode,
                 thinkingEnabled = aiService.isActiveProviderThinkingEnabled()
             )
 
@@ -681,7 +688,7 @@ class WeChatBridge @Inject constructor(
                         delay(500)
                     }
 
-                    // 8. 保存 AI 回复到聊天记录（归属到活跃会话）
+                    // 8. 保存 AI 回复到聊天记录
                     chatHistoryRepository.insert(
                         ChatHistoryEntity(
                             characterId = character.id,
@@ -692,6 +699,15 @@ class WeChatBridge @Inject constructor(
                         )
                     )
 
+                    // 存储结果供 mutex 外发送（剧情模式：强制空行分隔）
+                    aiSuccess = true
+                    filteredContent = if (chatMode == "story") {
+                        chatOutputFilter.formatStory(response.content)
+                    } else {
+                        response.content
+                    }
+                    outTypingTicket = typingTicket
+
                     // 8.5. 后台触发对话摘要（不阻塞主流程）
                     scope.launch {
                         try {
@@ -701,56 +717,61 @@ class WeChatBridge @Inject constructor(
                         }
                     }
 
-                    // 9. 拆分回复为多条消息，模拟真人逐条发送
-                    val parts = splitReplyMessages(response.content)
-                    for ((index, part) in parts.withIndex()) {
-                        val sendResult = sendMessage(incoming.peerId, part)
-                        if (sendResult.isFailure) {
-                            Log.e("WeChatBridge", "发送微信回复失败", sendResult.exceptionOrNull())
-                            break
-                        }
-                        // 消息之间加延迟，模拟真人打字节奏
-                        if (index < parts.size - 1) {
-                            val typingDelay = (part.length * 80L + 500L).coerceIn(800L, 3000L)
-                            delay(typingDelay)
-                            // 每发一条之前重新发送 typing 状态
-                            if (typingTicket != null) {
-                                try {
-                                    weChatApiService.sendTyping(
-                                        request = SendTypingRequest(
-                                            typingTicket = typingTicket,
-                                            status = 1,
-                                            ilinkUserId = weChatRepository.userId ?: ""
-                                        ),
-                                        uin = weChatRepository.generateUin(),
-                                        authorization = "Bearer $botToken"
-                                    )
-                                } catch (e: Exception) {
-                        Log.w("WeChatBridge", "停止typing失败", e)
-                    }
-                            }
-                        }
-                    }
                 } else {
                     Log.w("WeChatBridge", "AI 回复为空或失败: ${response.errorMessage}")
+                    outTypingTicket = typingTicket
                 }
-            } finally {
-                // 10. 停止"正在输入"状态
-                if (typingTicket != null) {
-                    try {
-                        weChatApiService.sendTyping(
-                            request = SendTypingRequest(
-                                typingTicket = typingTicket,
-                                status = 2,  // 2=停止输入
-                                ilinkUserId = weChatRepository.userId ?: ""
-                            ),
-                            uin = weChatRepository.generateUin(),
-                            authorization = "Bearer $botToken"
-                        )
-                    } catch (e: Exception) {
-                        Log.w("WeChatBridge", "停止 typing 状态失败", e)
+            } catch (e: Exception) {
+                Log.e("WeChatBridge", "AI 调用异常", e)
+                outTypingTicket = typingTicket
+            }
+        } // replyMutex 释放——消息发送不持锁
+
+        // 9. 拆分回复为多条消息，在 mutex 外发送
+        if (aiSuccess && filteredContent.isNotBlank()) {
+            val parts = splitReplyMessages(filteredContent)
+            for ((index, part) in parts.withIndex()) {
+                val sendResult = sendMessage(incoming.peerId, part)
+                if (sendResult.isFailure) {
+                    Log.e("WeChatBridge", "发送微信回复失败", sendResult.exceptionOrNull())
+                    break
+                }
+                if (index < parts.size - 1) {
+                    val typingDelay = (part.length * 80L + 500L).coerceIn(800L, 3000L)
+                    delay(typingDelay)
+                    if (outTypingTicket != null) {
+                        try {
+                            weChatApiService.sendTyping(
+                                request = SendTypingRequest(
+                                    typingTicket = outTypingTicket,
+                                    status = 1,
+                                    ilinkUserId = weChatRepository.userId ?: ""
+                                ),
+                                uin = weChatRepository.generateUin(),
+                                authorization = "Bearer $botToken"
+                            )
+                        } catch (e: Exception) {
+                            Log.w("WeChatBridge", "发送typing状态失败", e)  // B30 fix: 原来是"停止typing失败"，日志文案修正
+                        }
                     }
                 }
+            }
+        }
+
+        // 10. 停止"正在输入"状态，在 mutex 外
+        if (outTypingTicket != null) {
+            try {
+                weChatApiService.sendTyping(
+                    request = SendTypingRequest(
+                        typingTicket = outTypingTicket,
+                        status = 2,
+                        ilinkUserId = weChatRepository.userId ?: ""
+                    ),
+                    uin = weChatRepository.generateUin(),
+                    authorization = "Bearer $botToken"
+                )
+            } catch (e: Exception) {
+                Log.w("WeChatBridge", "停止 typing 状态失败", e)
             }
         }
     }

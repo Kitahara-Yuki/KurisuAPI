@@ -1,6 +1,7 @@
 package com.kurisuapi.ui.screen.settings
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -61,8 +62,10 @@ fun ProviderEditScreen(
     var apiKey by rememberSaveable { mutableStateOf("") }
     var modelsUrlOverride by rememberSaveable { mutableStateOf("") }
     var model by rememberSaveable { mutableStateOf("") }
-    var temperature by rememberSaveable { mutableStateOf("0.7") }
+    var temperature by rememberSaveable { mutableStateOf("0.9") }
     var maxTokens by rememberSaveable { mutableStateOf("2048") }
+    var frequencyPenalty by rememberSaveable { mutableStateOf("0.6") }
+    var presencePenalty by rememberSaveable { mutableStateOf("0.4") }
     var isDefault by rememberSaveable { mutableStateOf(false) }
     var thinkingEnabled by rememberSaveable { mutableStateOf(true) }
     var reasoningEffort by rememberSaveable { mutableStateOf("high") }
@@ -84,6 +87,8 @@ fun ProviderEditScreen(
                 name = it.name; type = it.type; baseUrl = it.baseUrl; apiKey = it.apiKey
                 modelsUrlOverride = it.modelsUrlOverride ?: ""; model = it.model
                 temperature = it.temperature.toString(); maxTokens = it.maxTokens.toString()
+                frequencyPenalty = it.frequencyPenalty.toString()
+                presencePenalty = it.presencePenalty.toString()
                 isDefault = it.isDefault; thinkingEnabled = it.thinkingEnabled
                 reasoningEffort = it.reasoningEffort
                 thinkingBudgetTokens = if (it.thinkingBudgetTokens > 0) it.thinkingBudgetTokens.toString() else ""
@@ -124,18 +129,18 @@ fun ProviderEditScreen(
                             id = if (providerId > 0) providerId else null,
                             name = name, type = type, baseUrl = baseUrl, apiKey = apiKey,
                             modelsUrlOverride = modelsUrlOverride.ifBlank { null },
-                            model = model, temperature = temperature.toDoubleOrNull() ?: 0.7,
+                            model = model, temperature = temperature.toDoubleOrNull() ?: 0.9,
                             maxTokens = maxTokens.toIntOrNull() ?: 2048, isDefault = isDefault,
                             thinkingEnabled = thinkingEnabled, reasoningEffort = reasoningEffort,
                             thinkingBudgetTokens = thinkingBudgetTokens.toIntOrNull() ?: 0,
                             contextWindow = contextWindow.toLongOrNull() ?: 0,
+                            frequencyPenalty = frequencyPenalty.toDoubleOrNull() ?: 0.6,
+                            presencePenalty = presencePenalty.toDoubleOrNull() ?: 0.4,
                             onDone = onNavigateBack
                         )
                     }) { Icon(Icons.Outlined.Save, contentDescription = "保存") }
                 },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.92f)
-                )
+                colors = com.kurisuapi.ui.theme.topBarColors()
             )
         }
     ) { paddingValues ->
@@ -168,7 +173,8 @@ fun ProviderEditScreen(
                     ) {
                         Column(modifier = Modifier.padding(sdp(12.dp))) {
                             API_FORMATS.forEach { format ->
-                                Row(modifier = Modifier.fillMaxWidth().padding(vertical = sdp(4.dp)),
+                                Row(modifier = Modifier.fillMaxWidth().padding(vertical = sdp(4.dp))
+                                    .clickable { onFormatChanged(format.type) },
                                     verticalAlignment = Alignment.CenterVertically) {
                                     RadioButton(selected = type == format.type, onClick = { onFormatChanged(format.type) })
                                     Column(modifier = Modifier.padding(start = sdp(8.dp))) {
@@ -231,9 +237,40 @@ fun ProviderEditScreen(
                 }
             }
 
-            item { Row(verticalAlignment = Alignment.CenterVertically) {
-                Checkbox(checked = isDefault, onCheckedChange = { isDefault = it }); Text("设为默认")
-            }}
+            // 高级选项：模型地址覆写
+            item {
+                var showAdvanced by remember { mutableStateOf(false) }
+                TextButton(onClick = { showAdvanced = !showAdvanced }) {
+                    Icon(
+                        if (showAdvanced) Icons.Outlined.ExpandLess else Icons.Outlined.ExpandMore,
+                        contentDescription = null,
+                        modifier = Modifier.size(sdp(18.dp))
+                    )
+                    Spacer(modifier = Modifier.width(sdp(4.dp)))
+                    Text("高级选项", style = MaterialTheme.typography.bodyMedium)
+                }
+                AnimatedVisibility(visible = showAdvanced) {
+                    Column(verticalArrangement = Arrangement.spacedBy(sdp(12.dp))) {
+                        OutlinedTextField(
+                            value = modelsUrlOverride,
+                            onValueChange = { modelsUrlOverride = it },
+                            label = { Text("模型列表 URL（可选）") },
+                            placeholder = { Text("留空则自动推导，如 https://api.example.com/v1/models") },
+                            modifier = Modifier.fillMaxWidth(),
+                            singleLine = true
+                        )
+                    }
+                }
+            }
+
+            item {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.clickable { isDefault = !isDefault }
+                ) {
+                    Checkbox(checked = isDefault, onCheckedChange = { isDefault = it }); Text("设为默认")
+                }
+            }
 
             item {
                 Card(
@@ -293,45 +330,140 @@ fun ProviderEditScreen(
                     placeholder = { Text("获取模型后自动选择，或手动输入") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
             }
             item {
-                Row(horizontalArrangement = Arrangement.spacedBy(sdp(12.dp))) {
-                    OutlinedTextField(value = temperature, onValueChange = { temperature = it }, label = { Text("温度") },
-                        placeholder = { Text("0.7") }, modifier = Modifier.weight(1f), singleLine = true)
-                    var showMaxPresets by remember { mutableStateOf(false) }
-                    OutlinedTextField(value = maxTokens, onValueChange = { maxTokens = it },
-                        label = { Text("最大回复长度") }, placeholder = { Text("2048") },
-                        trailingIcon = {
-                            Box {
-                                IconButton(onClick = { showMaxPresets = true }, modifier = Modifier.size(sdp(40.dp))) {
-                                    Icon(Icons.Outlined.ArrowDropDown, contentDescription = "预设选项",
-                                        modifier = Modifier.size(sdp(24.dp)))
-                                }
-                                DropdownMenu(expanded = showMaxPresets,
-                                    onDismissRequest = { showMaxPresets = false }) {
-                                    listOf(
-                                        Triple("512", "512 tokens", "节约"), Triple("1024", "1,024 tokens", "平衡"),
-                                        Triple("2048", "2,048 tokens", "推荐"), Triple("4096", "4,096 tokens", "剧情"),
-                                        Triple("8192", "8,192 tokens", "不可思议"),
-                                    ).forEach { (value, desc, tag) ->
-                                        DropdownMenuItem(text = {
-                                            Column {
-                                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                                    Text(value, fontWeight = FontWeight.Medium)
-                                                    Spacer(Modifier.width(sdp(8.dp)))
-                                                    Text(desc, style = MaterialTheme.typography.bodySmall,
-                                                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
-                                                }
-                                                Spacer(Modifier.height(sdp(4.dp)))
-                                                AssistChip(onClick = {}, label = { Text(tag, style = MaterialTheme.typography.labelSmall) },
-                                                    modifier = Modifier.height(sdp(24.dp)))
+                // 温度滑块
+                val tempValue = (temperature.toDoubleOrNull() ?: 0.9).toFloat()
+                Column(verticalArrangement = Arrangement.spacedBy(sdp(4.dp))) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text("温度", style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium)
+                        Text(
+                            "%.1f".format(tempValue),
+                            style = MaterialTheme.typography.titleMedium,
+                            color = MaterialTheme.colorScheme.primary,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                    }
+                    Slider(
+                        value = tempValue,
+                        onValueChange = { temperature = "%.1f".format(it.coerceIn(0f, 2f)) },
+                        valueRange = 0f..2f,
+                        steps = 19,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    Text(
+                        "越高回复越有创意，越低越保守。角色扮演推荐 0.85-1.0",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
+                    )
+                }
+            }
+
+            // 频率惩罚和存在惩罚仅 OpenAI 兼容格式支持
+            if (type == "openai_compatible") {
+            item {
+                // 频率惩罚滑块
+                val fpValue = (frequencyPenalty.toDoubleOrNull() ?: 0.6).toFloat()
+                Column(verticalArrangement = Arrangement.spacedBy(sdp(4.dp))) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text("频率惩罚", style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium)
+                        Text(
+                            "%.1f".format(fpValue),
+                            style = MaterialTheme.typography.titleMedium,
+                            color = MaterialTheme.colorScheme.primary,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                    }
+                    Slider(
+                        value = fpValue,
+                        onValueChange = { frequencyPenalty = "%.1f".format(it.coerceIn(0f, 2f)) },
+                        valueRange = 0f..2f,
+                        steps = 19,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    Text(
+                        "防止 AI 重复使用同样的词。越高越不容易重复自己。推荐 0.5-0.8",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
+                    )
+                }
+            }
+
+            item {
+                // 存在惩罚滑块
+                val ppValue = (presencePenalty.toDoubleOrNull() ?: 0.4).toFloat()
+                Column(verticalArrangement = Arrangement.spacedBy(sdp(4.dp))) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text("存在惩罚", style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium)
+                        Text(
+                            "%.1f".format(ppValue),
+                            style = MaterialTheme.typography.titleMedium,
+                            color = MaterialTheme.colorScheme.primary,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                    }
+                    Slider(
+                        value = ppValue,
+                        onValueChange = { presencePenalty = "%.1f".format(it.coerceIn(0f, 2f)) },
+                        valueRange = 0f..2f,
+                        steps = 19,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    Text(
+                        "鼓励 AI 聊新话题。越高 AI 越主动换话题。推荐 0.3-0.6",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
+                    )
+                }
+            }
+            } // end if type == "openai_compatible" — 频率/存在惩罚仅 OpenAI 兼容格式支持
+
+            item {
+                var showMaxPresets by remember { mutableStateOf(false) }
+                OutlinedTextField(value = maxTokens, onValueChange = { maxTokens = it.filter { it.isDigit() } },
+                    label = { Text("最大回复长度") }, placeholder = { Text("2048") }, modifier = Modifier.fillMaxWidth(), singleLine = true,
+                    trailingIcon = {
+                        Box {
+                            IconButton(onClick = { showMaxPresets = true }, modifier = Modifier.size(sdp(40.dp))) {
+                                Icon(Icons.Outlined.ArrowDropDown, contentDescription = "预设选项",
+                                    modifier = Modifier.size(sdp(24.dp)))
+                            }
+                            DropdownMenu(expanded = showMaxPresets,
+                                onDismissRequest = { showMaxPresets = false }) {
+                                listOf(
+                                    Triple("512", "512 tokens", "节约"), Triple("1024", "1,024 tokens", "平衡"),
+                                    Triple("2048", "2,048 tokens", "推荐"), Triple("4096", "4,096 tokens", "剧情"),
+                                    Triple("8192", "8,192 tokens", "不可思议"),
+                                ).forEach { (value, desc, tag) ->
+                                    DropdownMenuItem(text = {
+                                        Column {
+                                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                                Text(value, fontWeight = FontWeight.Medium)
+                                                Spacer(Modifier.width(sdp(8.dp)))
+                                                Text(desc, style = MaterialTheme.typography.bodySmall,
+                                                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
                                             }
-                                        }, onClick = { maxTokens = value; showMaxPresets = false },
-                                            leadingIcon = { if (maxTokens == value) Icon(Icons.Outlined.Check,
-                                                contentDescription = null, tint = MaterialTheme.colorScheme.primary) })
-                                    }
+                                            Spacer(Modifier.height(sdp(4.dp)))
+                                            AssistChip(onClick = {}, label = { Text(tag, style = MaterialTheme.typography.labelSmall) },
+                                                modifier = Modifier.height(sdp(24.dp)))
+                                        }
+                                    }, onClick = { maxTokens = value; showMaxPresets = false },
+                                        leadingIcon = { if (maxTokens == value) Icon(Icons.Outlined.Check,
+                                            contentDescription = null, tint = MaterialTheme.colorScheme.primary) })
                                 }
                             }
-                        }, modifier = Modifier.weight(1f), singleLine = true)
-                }
+                        }
+                    })
             }
 
             // Context window - 带预设选项的下拉按钮
@@ -461,13 +593,19 @@ fun ProviderEditScreen(
 
             items(models, key = { it.modelId }) { modelItem ->
                 Card(
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier.fillMaxWidth().clickable { model = modelItem.modelId },
                     colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.85f)),
                     shape = MaterialTheme.shapes.medium
                 ) {
                     ListItem(
                         headlineContent = {
                             Row(verticalAlignment = Alignment.CenterVertically) {
+                                if (model == modelItem.modelId) {
+                                    Icon(Icons.Outlined.CheckCircle, contentDescription = "已选择",
+                                        tint = MaterialTheme.colorScheme.primary,
+                                        modifier = Modifier.size(sdp(18.dp)))
+                                    Spacer(modifier = Modifier.width(sdp(6.dp)))
+                                }
                                 Text(modelItem.displayName)
                                 if (modelItem.status == "deprecated") {
                                     Spacer(modifier = Modifier.width(sdp(8.dp)))
@@ -553,6 +691,9 @@ private fun AddModelDialog(onDismiss: () -> Unit, onConfirm: (String, String) ->
     var modelId by remember { mutableStateOf("") }
     var displayName by remember { mutableStateOf("") }
     AlertDialog(
+        containerColor = MaterialTheme.colorScheme.surface,
+        titleContentColor = MaterialTheme.colorScheme.onSurface,
+        textContentColor = MaterialTheme.colorScheme.onSurfaceVariant,
         onDismissRequest = onDismiss, title = { Text("添加模型") },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(sdp(8.dp))) {

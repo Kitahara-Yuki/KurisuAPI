@@ -9,6 +9,10 @@ interface ConversationSessionDao {
     @Query("SELECT * FROM conversation_sessions WHERE characterId = :characterId AND isDeleted = 0 ORDER BY updatedAt DESC")
     fun observeAllByCharacter(characterId: Long): Flow<List<ConversationSessionEntity>>
 
+    /** 一次性查询（替代 observeAllByCharacter().firstOrNull() 的 Flow 误用） */
+    @Query("SELECT * FROM conversation_sessions WHERE characterId = :characterId AND isDeleted = 0 ORDER BY updatedAt DESC")
+    suspend fun getAllByCharacterOnce(characterId: Long): List<ConversationSessionEntity>
+
     @Query("SELECT * FROM conversation_sessions WHERE folderId = :folderId AND isDeleted = 0 ORDER BY updatedAt DESC")
     fun getByFolder(folderId: Long): Flow<List<ConversationSessionEntity>>
 
@@ -26,6 +30,10 @@ interface ConversationSessionDao {
 
     @Query("UPDATE conversation_sessions SET folderId = :folderId, updatedAt = :updatedAt WHERE id = :id")
     suspend fun updateFolder(id: Long, folderId: Long?, updatedAt: Long = System.currentTimeMillis())
+
+    /** 清空指定文件夹中所有会话的 folderId（删除文件夹时调用） */
+    @Query("UPDATE conversation_sessions SET folderId = NULL, updatedAt = :updatedAt WHERE folderId = :folderId")
+    suspend fun clearFolderId(folderId: Long, updatedAt: Long = System.currentTimeMillis())
 
     @Query("UPDATE conversation_sessions SET isArchived = 1, updatedAt = :updatedAt WHERE id = :id")
     suspend fun archive(id: Long, updatedAt: Long = System.currentTimeMillis())

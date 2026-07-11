@@ -43,11 +43,26 @@ class WeChatViewModel @Inject constructor(
     private val _botProactiveInterval = MutableStateFlow(SettingsRepository.DEFAULT_PROACTIVE_INTERVAL)
     val botProactiveInterval: StateFlow<Int> = _botProactiveInterval.asStateFlow()
 
+    private val _proactiveMaxPerDay = MutableStateFlow(SettingsRepository.DEFAULT_PROACTIVE_MAX_PER_DAY)
+    val proactiveMaxPerDay: StateFlow<Int> = _proactiveMaxPerDay.asStateFlow()
+
+    private val _proactiveTodayCount = MutableStateFlow(0)
+    val proactiveTodayCount: StateFlow<Int> = _proactiveTodayCount.asStateFlow()
+
+    private val _proactiveQuietStart = MutableStateFlow(SettingsRepository.DEFAULT_PROACTIVE_QUIET_START)
+    val proactiveQuietStart: StateFlow<Int> = _proactiveQuietStart.asStateFlow()
+
+    private val _proactiveQuietEnd = MutableStateFlow(SettingsRepository.DEFAULT_PROACTIVE_QUIET_END)
+    val proactiveQuietEnd: StateFlow<Int> = _proactiveQuietEnd.asStateFlow()
+
     private val _showThinking = MutableStateFlow(true)
     val showThinking: StateFlow<Boolean> = _showThinking.asStateFlow()
 
     private val _autoMemoryEnabled = MutableStateFlow(true)
     val autoMemoryEnabled: StateFlow<Boolean> = _autoMemoryEnabled.asStateFlow()
+
+    private val _circadianEnabled = MutableStateFlow(false) // 默认关闭
+    val circadianEnabled: StateFlow<Boolean> = _circadianEnabled.asStateFlow()
 
     // Bug4: 防止重复点击，记录当前是否正在登录
     private var isLoggingIn = false
@@ -61,12 +76,24 @@ class WeChatViewModel @Inject constructor(
         loadBotSettings()
         loadShowThinking()
         loadAutoMemory()
+        loadCircadian()
     }
 
     private fun loadBotSettings() {
         viewModelScope.launch {
             _botProactiveEnabled.value = settingsRepository.isBotProactiveEnabled()
             _botProactiveInterval.value = settingsRepository.getBotProactiveInterval()
+        }
+        // 主动消息追踪设置
+        loadProactiveTracking()
+    }
+
+    private fun loadProactiveTracking() {
+        viewModelScope.launch {
+            _proactiveMaxPerDay.value = settingsRepository.getProactiveMaxPerDay()
+            _proactiveTodayCount.value = settingsRepository.getProactiveDailyCount()
+            _proactiveQuietStart.value = settingsRepository.getProactiveQuietStart()
+            _proactiveQuietEnd.value = settingsRepository.getProactiveQuietEnd()
         }
     }
 
@@ -97,6 +124,24 @@ class WeChatViewModel @Inject constructor(
         }
     }
 
+    fun setProactiveMaxPerDay(max: Int) {
+        val clamped = max.coerceIn(1, 20)
+        _proactiveMaxPerDay.value = clamped
+        viewModelScope.launch {
+            settingsRepository.setProactiveMaxPerDay(clamped)
+        }
+    }
+
+    fun setProactiveQuietStart(hour: Int) {
+        _proactiveQuietStart.value = hour.coerceIn(0, 23)
+        viewModelScope.launch { settingsRepository.setProactiveQuietStart(hour.coerceIn(0, 23)) }
+    }
+
+    fun setProactiveQuietEnd(hour: Int) {
+        _proactiveQuietEnd.value = hour.coerceIn(0, 23)
+        viewModelScope.launch { settingsRepository.setProactiveQuietEnd(hour.coerceIn(0, 23)) }
+    }
+
     fun setShowThinking(enabled: Boolean) {
         _showThinking.value = enabled
         viewModelScope.launch {
@@ -111,22 +156,20 @@ class WeChatViewModel @Inject constructor(
         }
     }
 
-    // 后台任务专用模型
-    private val _backgroundModel = MutableStateFlow("")
-    val backgroundModel: StateFlow<String> = _backgroundModel.asStateFlow()
-
-    fun loadBackgroundModel() {
+    private fun loadCircadian() {
         viewModelScope.launch {
-            _backgroundModel.value = settingsRepository.getBackgroundModel()
+            _circadianEnabled.value = settingsRepository.isCircadianEnabled()
         }
     }
 
-    fun setBackgroundModel(modelId: String) {
-        _backgroundModel.value = modelId
+    fun setCircadianEnabled(enabled: Boolean) {
+        _circadianEnabled.value = enabled
         viewModelScope.launch {
-            settingsRepository.setBackgroundModel(modelId)
+            settingsRepository.setCircadianEnabled(enabled)
         }
     }
+
+
 
     fun startLogin() {
         // Bug4: 防止重复点击

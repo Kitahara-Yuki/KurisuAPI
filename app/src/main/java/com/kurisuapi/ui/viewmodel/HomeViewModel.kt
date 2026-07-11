@@ -33,31 +33,28 @@ class HomeViewModel @Inject constructor(
     // 改为响应式 observeById，角色资料变更实时反映。
     val activeCharacter: StateFlow<CharacterEntity?> = activeCharacterId
         .flatMapLatest { id ->
-            if (id > 0) characterRepository.observeById(id) else flowOf(null)
+            if (id > 0) characterRepository.observeById(id).catch { emit(null) } else flowOf(null)
         }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
 
     val emotion: StateFlow<EmotionStateEntity?> = activeCharacterId
         .flatMapLatest { id ->
-            if (id > 0) emotionRepository.getByCharacter(id) else flowOf(null)
+            if (id > 0) emotionRepository.getByCharacter(id).catch { emit(null) } else flowOf(null)
         }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
 
     val relationship: StateFlow<RelationshipEntity?> = activeCharacterId
         .flatMapLatest { id ->
-            if (id > 0) relationshipRepository.getByCharacter(id) else flowOf(null)
+            if (id > 0) relationshipRepository.getByCharacter(id).catch { emit(null) } else flowOf(null)
         }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
 
     val recentMessages: StateFlow<List<ChatHistoryEntity>> = activeCharacterId
         .flatMapLatest { id ->
-            if (id > 0) chatHistoryRepository.getByCharacter(id).map { it.take(5) }
+            if (id > 0) chatHistoryRepository.getByCharacter(id).map { it.take(5) }.catch { emit(emptyList()) }
             else flowOf(emptyList())
         }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
-
-    private val _wechatStatus = MutableStateFlow("未连接")
-    val wechatStatus: StateFlow<String> = _wechatStatus.asStateFlow()
 
     private val _aiStatus = MutableStateFlow("就绪")
     val aiStatus: StateFlow<String> = _aiStatus.asStateFlow()
@@ -66,7 +63,13 @@ class HomeViewModel @Inject constructor(
         // 切换活跃角色时检查是否需要增加孤独感（长时间不聊天）
         viewModelScope.launch {
             activeCharacterId.collect { id ->
-                if (id > 0) applyLonelinessDecayIfNeeded(id)
+                if (id > 0) {
+                    try {
+                        applyLonelinessDecayIfNeeded(id)
+                    } catch (_: Exception) {
+                        // 衰减失败不影响主流程，外层 try-catch 防止协程静默死亡
+                    }
+                }
             }
         }
     }
@@ -74,31 +77,20 @@ class HomeViewModel @Inject constructor(
     /**
      * 如果用户长时间未与角色聊天，自动增加孤独感。
      * 规则：距最后一条消息超过 24 小时，每过一天孤独感 +5（上限 80）。
+     * 使用 EmotionEngine 的原子方法，独立的时间戳防止聊天频繁导致衰减被抑制。
      */
     private suspend fun applyLonelinessDecayIfNeeded(characterId: Long) {
-        try {
-            val recentMessages = chatHistoryRepository.getRecent(characterId, 1)
-            if (recentMessages.isEmpty()) return
+        val recentMessages = chatHistoryRepository.getRecent(characterId, 1)
+        if (recentMessages.isEmpty()) return
 
-            val lastMessageTime = recentMessages.first().timestamp
-            val hoursSinceLastChat = (System.currentTimeMillis() - lastMessageTime) / (1000 * 60 * 60)
+        val lastMessageTime = recentMessages.first().timestamp
+        val now = System.currentTimeMillis()
+        val hoursSinceLastChat = (now - lastMessageTime) / (1000 * 60 * 60)
 
-            if (hoursSinceLastChat >= 24) {
-                val emotion = emotionEngine.getEmotion(characterId)
-                val daysSince = (hoursSinceLastChat / 24).toInt()
-                val lonelinessIncrease = (daysSince * 5).coerceAtMost(80 - emotion.lonely).coerceAtLeast(0)
-
-                if (lonelinessIncrease > 0) {
-                    emotionRepository.insertOrUpdate(
-                        emotion.copy(
-                            lonely = (emotion.lonely + lonelinessIncrease).coerceIn(0, 80),
-                            updatedAt = System.currentTimeMillis()
-                        )
-                    )
-                }
-            }
-        } catch (_: Exception) {
-            // 衰减失败不影响主流程
+        if (hoursSinceLastChat >= 24) {
+            val daysSince = (hoursSinceLastChat / 24).toInt()
+            val lonelinessIncrease = (daysSince * 5).coerceAtLeast(0)
+            emotionEngine.applyLonelinessDecay(characterId, lonelinessIncrease)
         }
     }
 

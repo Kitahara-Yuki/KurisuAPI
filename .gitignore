@@ -13,6 +13,7 @@
 
 # 本地配置（含签名密码）
 local.properties
+release.keystore
 
 # Gradle
 .gradle/
@@ -20,6 +21,19 @@ local.properties
 # Kotlin
 .kotlin/
 
-# 内存/计划文件（私人）
+# Claude Code 个人文件（保留 CLAUDE.md 作为项目文档）
 .claude/plans/
 .claude/memory/
+.claude/settings.local.json
+.claude/settings.json
+.claude/skills/
+.claude/worktrees/
+.claude/agents/
+
+# 个人 AI 工具文件
+.agents/
+.reasonix/
+reasonix.toml
+skills-lock.json
+config/
+docs/

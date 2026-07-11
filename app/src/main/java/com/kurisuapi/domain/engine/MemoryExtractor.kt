@@ -5,6 +5,7 @@ import com.google.gson.Gson
 import com.google.gson.JsonObject
 import com.kurisuapi.data.api.ChatMessage
 import com.kurisuapi.data.entity.MemoryEntity
+import com.kurisuapi.data.entity.RelationshipEntity
 import com.kurisuapi.data.entity.UserProfileEntity
 import com.kurisuapi.data.repository.ChatHistoryRepository
 import com.kurisuapi.data.repository.EmotionRepository
@@ -16,6 +17,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeout
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -42,6 +44,7 @@ class MemoryExtractor @Inject constructor(
     private val relationshipRepository: RelationshipRepository,
     private val indexRepository: com.kurisuapi.data.repository.ConversationIndexRepository,
     private val settingsRepository: com.kurisuapi.data.repository.SettingsRepository,
+    private val keywordExtractor: KeywordExtractor,
     private val gson: Gson
 ) {
     companion object {
@@ -92,7 +95,7 @@ class MemoryExtractor @Inject constructor(
         }
 
         // ---- 第1步：提取事实 ----
-        val facts = extractFacts(conversation)
+        val facts = extractFacts(conversation, characterId)
 
         if (facts.isNotEmpty()) {
             // ---- 第2步：记忆决策 ADD/UPDATE/DELETE/NONE ----
@@ -113,6 +116,9 @@ class MemoryExtractor @Inject constructor(
             generateConversationIndex(characterId, sessionId, conversation)
         }
 
+        // ---- 第6步：复发触发记忆抽象 ----
+        consolidateMemories(characterId)
+
         return true
     }
 
@@ -129,7 +135,7 @@ class MemoryExtractor @Inject constructor(
     ): Int = withContext(Dispatchers.IO) {
         if (characterId <= 0) return@withContext -1
         try {
-            val allMemories = memoryRepository.getAllByCharacter(characterId)
+            val allMemories = memoryRepository.getAllByCharacter(characterId, limit = 10_000)  // ponytail: 全量批处理，足够大
             if (allMemories.isEmpty()) return@withContext 0
             val total = allMemories.size
 
@@ -154,7 +160,7 @@ class MemoryExtractor @Inject constructor(
                     val response = backgroundChat(listOf(
                         ChatMessage(role = "system", content = systemPrompt),
                         ChatMessage(role = "user", content = memoryList)
-                    ))
+                    ), characterId)
                     if (response.success && response.content.isNotBlank()) {
                         val json = parseJsonObject(response.content)
                         val arr = json?.getAsJsonArray("memories")
@@ -168,7 +174,8 @@ class MemoryExtractor @Inject constructor(
                                 allUpdated.add(original.copy(
                                     content = newContent,
                                     importance = MemoryEntity.clampImportance(newImportance),
-                                    source = "auto"
+                                    source = "auto",
+                                    embedding = original.embedding  // 保留旧向量：规范化只优化表述，语义不变
                                 ))
                             }
                         }
@@ -194,7 +201,7 @@ class MemoryExtractor @Inject constructor(
 
     // ==================== 第1步：提取事实 ====================
 
-    private suspend fun extractFacts(conversation: String): List<FactItem> {
+    private suspend fun extractFacts(conversation: String, characterId: Long): List<FactItem> {
         val systemPrompt = """
             你是一个个人信息整理助手，专门从对话中准确提取关于"用户"的关键事实。
             关注以下类型的信息：
@@ -218,7 +225,7 @@ class MemoryExtractor @Inject constructor(
             backgroundChat(listOf(
                 ChatMessage(role = "system", content = systemPrompt),
                 ChatMessage(role = "user", content = "对话内容：\n$conversation")
-            ))
+            ), characterId)
         } catch (e: Exception) {
             Log.e(TAG, "事实提取调用失败", e)
             return emptyList()
@@ -305,15 +312,15 @@ class MemoryExtractor @Inject constructor(
             backgroundChat(listOf(
                 ChatMessage(role = "system", content = systemPrompt),
                 ChatMessage(role = "user", content = userPrompt)
-            ))
+            ), characterId)
         } catch (e: Exception) {
             Log.e(TAG, "记忆决策调用失败，降级为全部 ADD", e)
-            facts.forEach { insertAutoMemory(characterId, it.content, it.importance) }
+            facts.forEach { insertAutoMemory(characterId, it.content, it.importance, sessionId) }
             return
         }
 
         if (!response.success || response.content.isBlank()) {
-            facts.forEach { insertAutoMemory(characterId, it.content, it.importance) }
+            facts.forEach { insertAutoMemory(characterId, it.content, it.importance, sessionId) }
             return
         }
 
@@ -326,7 +333,7 @@ class MemoryExtractor @Inject constructor(
         }
 
         if (ops == null) {
-            facts.forEach { insertAutoMemory(characterId, it.content, it.importance) }
+            facts.forEach { insertAutoMemory(characterId, it.content, it.importance, sessionId) }
             return
         }
 
@@ -339,22 +346,34 @@ class MemoryExtractor @Inject constructor(
                         val text = obj.get("text")?.asString?.trim() ?: continue
                         val importance = obj.get("importance")?.asInt
                             ?.let { MemoryEntity.clampImportance(it) } ?: 5
-                        if (text.isNotBlank()) insertAutoMemory(characterId, text, importance)
+                        if (text.isNotBlank()) insertAutoMemory(characterId, text, importance, sessionId)
                     }
                     "UPDATE" -> {
                         val idx = obj.get("id")?.asString?.toIntOrNull() ?: continue
                         val text = obj.get("text")?.asString?.trim() ?: continue
                         existing.getOrNull(idx)?.let { old ->
                             if (text.isNotBlank()) {
+                                // 内容变了，重新生成向量
+                                val newEmbedding = try {
+                                    aiService.embed(text, characterId)?.let { embeddingService.encodeEmbedding(it) }
+                                } catch (e: Exception) { null }
                                 memoryRepository.update(
-                                    old.copy(content = text, source = "auto", updatedAt = System.currentTimeMillis())
+                                    old.copy(content = text, source = "auto",
+                                        embedding = newEmbedding ?: old.embedding,
+                                        updatedAt = System.currentTimeMillis())
                                 )
                             }
                         }
                     }
                     "DELETE" -> {
                         val idx = obj.get("id")?.asString?.toIntOrNull() ?: continue
-                        existing.getOrNull(idx)?.let { memoryRepository.delete(it) }
+                        existing.getOrNull(idx)?.let { old ->
+                            // 软删除：标记 isDeleted，与系统其他删除逻辑一致
+                            memoryRepository.update(
+                                old.copy(isDeleted = true, deletedAt = System.currentTimeMillis(),
+                                    updatedAt = System.currentTimeMillis())
+                            )
+                        }
                     }
                     else -> { /* NONE 或未知，忽略 */ }
                 }
@@ -368,7 +387,7 @@ class MemoryExtractor @Inject constructor(
         try {
             // 尝试生成语义向量（失败不影响记忆存储）
             val embedding = try {
-                aiService.embed(content)?.let { embeddingService.encodeEmbedding(it) }
+                aiService.embed(content, characterId)?.let { embeddingService.encodeEmbedding(it) }
             } catch (e: Exception) {
                 Log.w(TAG, "向量生成失败，跳过语义索引: ${e.message}")
                 null
@@ -418,7 +437,7 @@ class MemoryExtractor @Inject constructor(
             backgroundChat(listOf(
                 ChatMessage(role = "system", content = systemPrompt),
                 ChatMessage(role = "user", content = userPrompt)
-            ))
+            ), characterId)
         } catch (e: Exception) {
             Log.e(TAG, "画像更新调用失败", e)
             return
@@ -486,7 +505,7 @@ class MemoryExtractor @Inject constructor(
             backgroundChat(listOf(
                 ChatMessage(role = "system", content = systemPrompt),
                 ChatMessage(role = "user", content = "$currentState\n\n对话内容：\n$conversation")
-            ))
+            ), characterId)
         } catch (e: Exception) {
             Log.e(TAG, "情感精炼调用失败", e)
             return
@@ -517,22 +536,34 @@ class MemoryExtractor @Inject constructor(
                 emotionRepository.insertOrUpdate(updatedEmotion)
             }
 
-            // 解析关系偏移量
+            // 解析关系偏移量（三轴模型）
             val relJson = json.getAsJsonObject("relationship")
             if (relJson != null) {
                 val scoreDelta = relJson.get("score")?.asInt?.coerceIn(-3, 3) ?: 0
-                val newScore = maxOf(0, minOf(100, currentRelationship.score + scoreDelta))
-                val newLevel = RelationshipEngine.LEVELS.lastOrNull { newScore >= it.second }?.first ?: "陌生人"
-                try {
-                    relationshipRepository.insertOrUpdate(
-                        currentRelationship.copy(
-                            score = newScore,
-                            level = newLevel,
-                            updatedAt = System.currentTimeMillis()
+                // 将单值偏移量按比例分配到三轴
+                if (scoreDelta != 0) {
+                    val deltaPerAxis = scoreDelta / 3
+                    val remaining = scoreDelta - deltaPerAxis * 3
+                    val newIntimacy = clamp0to100(currentRelationship.intimacy + deltaPerAxis + (if (remaining > 0) 1 else if (remaining < 0) -1 else 0))
+                    val newTrust = clamp0to100(currentRelationship.trust + deltaPerAxis)
+                    val newAttraction = clamp0to100(currentRelationship.attraction + deltaPerAxis)
+                    val newComposite = newIntimacy + newTrust + newAttraction
+                    val newStage = RelationshipEntity.stageForComposite(newComposite)
+                    try {
+                        relationshipRepository.insertOrUpdate(
+                            currentRelationship.copy(
+                                intimacy = newIntimacy,
+                                trust = newTrust,
+                                attraction = newAttraction,
+                                stage = newStage,
+                                score = minOf(100, (newIntimacy + newTrust + newAttraction) / 3),
+                                level = newStage,
+                                updatedAt = System.currentTimeMillis()
+                            )
                         )
-                    )
-                } catch (e: Exception) {
-                    Log.e(TAG, "关系精炼写入失败，保留旧值", e)
+                    } catch (e: Exception) {
+                        Log.e(TAG, "关系精炼写入失败，保留旧值", e)
+                    }
                 }
             }
         } catch (e: Exception) {
@@ -555,7 +586,7 @@ class MemoryExtractor @Inject constructor(
             val response = backgroundChat(listOf(
                 ChatMessage(role = "system", content = systemPrompt),
                 ChatMessage(role = "user", content = conversation.take(2000))
-            ))
+            ), characterId)
 
             if (!response.success || response.content.isBlank()) return
 
@@ -578,12 +609,112 @@ class MemoryExtractor @Inject constructor(
         }
     }
 
+    // ==================== 第6步：复发触发记忆抽象 ====================
+
+    /**
+     * 复发触发记忆抽象：当同一关键词关联 >= 5 条记忆时，触发 LLM 总结为抽象认知。
+     * 灵感来源：RecMem 论文（ACL 2026，节省 87% token）。
+     * 失败不影响主流程，静默降级。
+     */
+    private suspend fun consolidateMemories(characterId: Long) {
+        try {
+            // 只取最近更新的 N 条活跃记忆做抽象分析（SQL 层 LIMIT，避免全量加载到内存）
+            val allMemories = memoryRepository.getAllByCharacter(characterId, limit = 200)
+            if (allMemories.size < 5) return  // 不够数，跳过
+
+            // 统计每个关键词关联的记忆 ID
+            val clusterMap = mutableMapOf<String, MutableSet<Long>>()
+            for (memory in allMemories) {
+                val tokens = keywordExtractor.extract(memory.content)
+                for (token in tokens) {
+                    clusterMap.getOrPut(token) { mutableSetOf() }.add(memory.id)
+                }
+            }
+
+            // 找到 >= 5 条记忆围绕同一主题的簇
+            val clusteredIds = clusterMap.values
+                .filter { it.size >= 5 }
+                .flatten()
+                .toSet()
+
+            if (clusteredIds.isEmpty()) return
+
+            // 取这些簇中的记忆
+            val clusterMemories = allMemories.filter { it.id in clusteredIds }
+            if (clusterMemories.size < 5) return
+
+            // 去重检查：抽象记忆已足够多时跳过（防止无限增长）
+            val abstractCount = allMemories.count { it.source == "abstracted" }
+            if (abstractCount >= 10) return
+
+            // 发给 LLM 做抽象总结
+            val memoryText = clusterMemories.joinToString("\n") { "- ${it.content}" }
+            val systemPrompt = """
+                你是一个知识抽象助手。请根据以下碎片记忆，提炼出关于"用户"的更高层认知。
+                要求：
+                - 将这些碎片整合成 1-3 条概括性的认知（如偏好、性格、习惯、人生状态等）
+                - 每条概括用第三人称，简洁明确
+                - 严格只输出 JSON，格式：{"insights": ["认知1", "认知2", "认知3"]}
+                不要输出任何其他内容。
+            """.trimIndent()
+
+            val response = backgroundChat(listOf(
+                ChatMessage(role = "system", content = systemPrompt),
+                ChatMessage(role = "user", content = memoryText)
+            ), characterId)
+
+            if (!response.success || response.content.isBlank()) return
+
+            val json = parseJsonObject(response.content) ?: return
+            val insightsList = json.getAsJsonArray("insights") ?: return
+            if (insightsList.size() == 0) return
+
+            // 计算抽象记忆的重要度：碎片平均 + 2
+            val avgImportance = clusterMemories.map { it.importance }.average().toInt()
+            val abstractImportance = (avgImportance + 2).coerceIn(1, 10)
+
+            // 存储抽象认知
+            val now = System.currentTimeMillis()
+            for (i in 0 until insightsList.size()) {
+                val insight = insightsList.get(i).asString
+                if (insight.isBlank()) continue
+                try {
+                    val embedding = aiService.embed(insight, characterId)?.let { embeddingService.encodeEmbedding(it) }
+                    memoryRepository.insert(
+                        MemoryEntity(
+                            characterId = characterId,
+                            content = insight,
+                            importance = abstractImportance,
+                            source = "abstracted",
+                            embedding = embedding,
+                            createdAt = now,
+                            updatedAt = now
+                        )
+                    )
+                } catch (e: Exception) {
+                    Log.w(TAG, "抽象记忆存储失败: ${e.message}")
+                }
+            }
+
+            // 降低原碎片记忆的重要度（让其自然下沉，但仍可独立检索）
+            val reducedMemories = clusterMemories.map { it.copy(importance = (it.importance / 2).coerceAtLeast(1)) }
+            try {
+                memoryRepository.updateAll(reducedMemories)
+            } catch (e: Exception) {
+                Log.w(TAG, "降低碎片重要度失败: ${e.message}")
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "记忆抽象失败，跳过", e)
+        }
+    }
+
     // ==================== 工具 ====================
 
-    /** 后台任务专用聊天（优先使用用户配置的后台模型，未配置则用默认） */
-    private suspend fun backgroundChat(messages: List<ChatMessage>): AiService.AiResponse {
-        val bgModel = settingsRepository.getBackgroundModel()
-        return aiService.chat(messages, modelOverride = bgModel.ifBlank { null })
+    // 每个 LLM 调用加 60 秒超时，防止某个调用卡死耗尽 IO 线程
+    private suspend fun backgroundChat(messages: List<ChatMessage>, characterId: Long): AiService.AiResponse {
+        return withTimeout(60_000L) {
+            aiService.chat(messages, modelOverride = null, characterId = characterId)
+        }
     }
 
     private fun parseJsonObject(raw: String): JsonObject? {

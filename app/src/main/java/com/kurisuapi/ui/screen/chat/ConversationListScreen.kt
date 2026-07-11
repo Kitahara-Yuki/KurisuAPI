@@ -17,7 +17,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
-import androidx.compose.runtime.saveable.rememberSaveable
+
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -57,7 +57,7 @@ fun ConversationListScreen(
     var showRenameDialog by remember { mutableStateOf<Pair<Long, String>?>(null) }
     var showRenameFolderDialog by remember { mutableStateOf<Pair<Long, String>?>(null) }
     var showDeleteFolderDialog by remember { mutableStateOf<Long?>(null) }
-    var hideModeLabels by rememberSaveable { mutableStateOf(false) }
+    val hideModeLabels by viewModel.hideModeLabels.collectAsState()
     var showRecycleBin by remember { mutableStateOf(false) }
     var showNewSessionDialog by remember { mutableStateOf(false) }
 
@@ -69,11 +69,6 @@ fun ConversationListScreen(
         topBar = {
             TopAppBar(
                 title = { Text("对话管理", fontWeight = FontWeight.SemiBold) },
-                navigationIcon = {
-                    IconButton(onClick = onNavigateBack) {
-                        Icon(Icons.Outlined.ArrowBack, contentDescription = "返回")
-                    }
-                },
                 actions = {
                     IconButton(onClick = { showRecycleBin = true }) {
                         if (deletedSessions.isNotEmpty()) {
@@ -90,9 +85,7 @@ fun ConversationListScreen(
                         Icon(Icons.Outlined.CreateNewFolder, contentDescription = "新建文件夹")
                     }
                 },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.92f)
-                )
+                colors = com.kurisuapi.ui.theme.topBarColors()
             )
         },
         floatingActionButton = {
@@ -155,7 +148,7 @@ fun ConversationListScreen(
                             isBotTarget = effectiveBotSessionId == session.id,
                             isExplicitlyBound = botSessionId == session.id,
                             hideModeLabels = hideModeLabels,
-                            onToggleHideModeLabels = { hideModeLabels = !hideModeLabels },
+                            onToggleHideModeLabels = { viewModel.toggleHideModeLabels() },
                             onClick = { onNavigateToChat(session.id) },
                             onArchive = { showArchiveDialog = session.id },
                             onMove = { showMoveDialog = session.id },
@@ -208,6 +201,9 @@ fun ConversationListScreen(
     showDeleteFolderDialog?.let { folderId ->
         AlertDialog(
             onDismissRequest = { showDeleteFolderDialog = null },
+            containerColor = MaterialTheme.colorScheme.surface,
+            titleContentColor = MaterialTheme.colorScheme.onSurface,
+            textContentColor = MaterialTheme.colorScheme.onSurfaceVariant,
             title = { Text("删除文件夹") },
             text = { Text("删除文件夹后，文件夹内的对话将移回「全部」。确定删除吗？") },
             confirmButton = {
@@ -227,6 +223,9 @@ fun ConversationListScreen(
     showArchiveDialog?.let { sessionId ->
         AlertDialog(
             onDismissRequest = { showArchiveDialog = null },
+            containerColor = MaterialTheme.colorScheme.surface,
+            titleContentColor = MaterialTheme.colorScheme.onSurface,
+            textContentColor = MaterialTheme.colorScheme.onSurfaceVariant,
             title = { Text("完成对话") },
             text = { Text("完成对话后，将不能对话") },
             confirmButton = {
@@ -264,6 +263,9 @@ fun ConversationListScreen(
     showDeleteDialog?.let { sessionId ->
         AlertDialog(
             onDismissRequest = { showDeleteDialog = null },
+            containerColor = MaterialTheme.colorScheme.surface,
+            titleContentColor = MaterialTheme.colorScheme.onSurface,
+            textContentColor = MaterialTheme.colorScheme.onSurfaceVariant,
             title = { Text("删除对话") },
             text = { Text("删除该对话后记忆也会随着聊天记录一起消失，是否删除该对话？") },
             confirmButton = {
@@ -289,7 +291,8 @@ fun ConversationListScreen(
             },
             onDelete = { sessionId ->
                 viewModel.permanentlyDeleteSession(sessionId)
-            }
+            },
+            viewModel = viewModel
         )
     }
 }
@@ -302,7 +305,7 @@ private fun RecycleBinDialog(
     onDismiss: () -> Unit,
     onRestore: (Long) -> Unit,
     onDelete: (Long) -> Unit,
-    viewModel: com.kurisuapi.ui.viewmodel.ConversationListViewModel = hiltViewModel()
+    viewModel: com.kurisuapi.ui.viewmodel.ConversationListViewModel
 ) {
     var sessionToDelete by remember { mutableStateOf<Long?>(null) }
     var sessionToShowMemories by remember { mutableStateOf<Long?>(null) }
@@ -315,6 +318,9 @@ private fun RecycleBinDialog(
         }
         AlertDialog(
             onDismissRequest = { sessionToShowMemories = null },
+            containerColor = MaterialTheme.colorScheme.surface,
+            titleContentColor = MaterialTheme.colorScheme.onSurface,
+            textContentColor = MaterialTheme.colorScheme.onSurfaceVariant,
             title = { Text("「${sessionTitle}」的记忆") },
             text = {
                 if (deletedMemories.isEmpty()) {
@@ -352,6 +358,9 @@ private fun RecycleBinDialog(
         val sessionTitle = deletedSessions.find { it.id == sid }?.title?.ifBlank { "新对话" } ?: "新对话"
         AlertDialog(
             onDismissRequest = { sessionToDelete = null },
+            containerColor = MaterialTheme.colorScheme.surface,
+            titleContentColor = MaterialTheme.colorScheme.onSurface,
+            textContentColor = MaterialTheme.colorScheme.onSurfaceVariant,
             icon = { Icon(Icons.Outlined.Warning, contentDescription = null, tint = MaterialTheme.colorScheme.error) },
             title = { Text("永久删除") },
             text = {
@@ -369,6 +378,9 @@ private fun RecycleBinDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
+        containerColor = MaterialTheme.colorScheme.surface,
+        titleContentColor = MaterialTheme.colorScheme.onSurface,
+        textContentColor = MaterialTheme.colorScheme.onSurfaceVariant,
         title = { Text("🗑️ 回收站") },
         text = {
             if (deletedSessions.isEmpty()) {
@@ -550,7 +562,8 @@ private fun FolderChipWithMenu(
         if (!isSystem) {
             DropdownMenu(
                 expanded = showMenu,
-                onDismissRequest = { showMenu = false }
+                onDismissRequest = { showMenu = false },
+                containerColor = MaterialTheme.colorScheme.surface
             ) {
                 DropdownMenuItem(
                     text = { Text("重命名文件夹") },
@@ -608,7 +621,7 @@ private fun ConversationCard(
         ) {
             Icon(
                 imageVector = when {
-                    isBotTarget && !isArchived -> Icons.Outlined.SmartToy
+                    isBotTarget && !isArchived -> Icons.Outlined.Chat
                     isArchived -> Icons.Outlined.Lock
                     else -> Icons.Outlined.Chat
                 },
@@ -641,10 +654,6 @@ private fun ConversationCard(
                             "微信",
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.tertiary,
-                            modifier = Modifier
-                                .clip(RoundedCornerShape(sdp(4.dp)))
-                                .background(MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.6f))
-                                .padding(horizontal = sdp(6.dp), vertical = 2.dp)
                         )
                     }
                     if (isArchived) {
@@ -652,26 +661,15 @@ private fun ConversationCard(
                             "已归档",
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f),
-                            modifier = Modifier
-                                .clip(RoundedCornerShape(sdp(4.dp)))
-                                .background(MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.5f))
-                                .padding(horizontal = sdp(6.dp), vertical = 2.dp)
                         )
                     }
                     if (!hideModeLabels) {
                         val isStory = session.chatMode == ConversationSessionEntity.CHAT_MODE_STORY
                         Text(
-                            text = if (isStory) "📖 剧情模式" else "💬 对话模式",
+                            text = if (isStory) "📖 剧情" else "💬 对话",
                             style = MaterialTheme.typography.labelSmall,
-                            color = if (isStory) MaterialTheme.colorScheme.tertiary
-                                    else MaterialTheme.colorScheme.secondary,
-                            modifier = Modifier
-                                .clip(RoundedCornerShape(sdp(4.dp)))
-                                .background(
-                                    if (isStory) MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.6f)
-                                    else MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.6f)
-                                )
-                                .padding(horizontal = sdp(6.dp), vertical = 2.dp)
+                            color = (if (isStory) MaterialTheme.colorScheme.tertiary
+                                    else MaterialTheme.colorScheme.secondary).copy(alpha = 0.7f),
                         )
                     }
                 }
@@ -696,8 +694,9 @@ private fun ConversationCard(
                 }
                 DropdownMenu(
                     expanded = showMoreMenu,
-                    onDismissRequest = { showMoreMenu = false }
-                ) {
+                    onDismissRequest = { showMoreMenu = false },
+                    containerColor = MaterialTheme.colorScheme.surface,
+                    ) {
                     if (!isArchived) {
                         DropdownMenuItem(
                             text = { Text("完成对话") },
@@ -714,7 +713,7 @@ private fun ConversationCard(
                             DropdownMenuItem(
                                 text = { Text("微信对话") },
                                 onClick = { showMoreMenu = false; onBindBot() },
-                                leadingIcon = { Icon(Icons.Outlined.SmartToy, contentDescription = null) }
+                                leadingIcon = { Icon(Icons.Outlined.Chat, contentDescription = null) }
                             )
                         }
                         DropdownMenuItem(
@@ -754,6 +753,9 @@ private fun CreateFolderDialog(onDismiss: () -> Unit, onCreate: (String) -> Unit
     var folderName by remember { mutableStateOf("") }
     AlertDialog(
         onDismissRequest = onDismiss,
+        containerColor = MaterialTheme.colorScheme.surface,
+        titleContentColor = MaterialTheme.colorScheme.onSurface,
+        textContentColor = MaterialTheme.colorScheme.onSurfaceVariant,
         title = { Text("新建文件夹") },
         text = {
             OutlinedTextField(
@@ -771,6 +773,9 @@ private fun RenameSessionDialog(currentTitle: String, onDismiss: () -> Unit, onR
     var newTitle by remember { mutableStateOf(currentTitle) }
     AlertDialog(
         onDismissRequest = onDismiss,
+        containerColor = MaterialTheme.colorScheme.surface,
+        titleContentColor = MaterialTheme.colorScheme.onSurface,
+        textContentColor = MaterialTheme.colorScheme.onSurfaceVariant,
         title = { Text("重命名对话") },
         text = {
             OutlinedTextField(
@@ -788,6 +793,9 @@ private fun RenameFolderDialog(currentName: String, onDismiss: () -> Unit, onRen
     var newName by remember { mutableStateOf(currentName) }
     AlertDialog(
         onDismissRequest = onDismiss,
+        containerColor = MaterialTheme.colorScheme.surface,
+        titleContentColor = MaterialTheme.colorScheme.onSurface,
+        textContentColor = MaterialTheme.colorScheme.onSurfaceVariant,
         title = { Text("重命名文件夹") },
         text = {
             OutlinedTextField(
@@ -805,6 +813,9 @@ private fun MoveToFolderDialog(folders: List<ConversationFolderEntity>, onDismis
     var selectedFolderId by remember { mutableStateOf<Long?>(null) }
     AlertDialog(
         onDismissRequest = onDismiss,
+        containerColor = MaterialTheme.colorScheme.surface,
+        titleContentColor = MaterialTheme.colorScheme.onSurface,
+        textContentColor = MaterialTheme.colorScheme.onSurfaceVariant,
         title = { Text("移动到文件夹") },
         text = {
             Column {
@@ -840,6 +851,9 @@ private fun NewSessionModeDialog(onDismiss: () -> Unit, onSelectMode: (String) -
     var selectedMode by remember { mutableStateOf(ConversationSessionEntity.CHAT_MODE_CHAT) }
     AlertDialog(
         onDismissRequest = onDismiss,
+        containerColor = MaterialTheme.colorScheme.surface,
+        titleContentColor = MaterialTheme.colorScheme.onSurface,
+        textContentColor = MaterialTheme.colorScheme.onSurfaceVariant,
         title = { Text("新建对话") },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(sdp(8.dp))) {

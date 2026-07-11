@@ -4,7 +4,9 @@ import com.kurisuapi.data.dao.ModelDao
 import com.kurisuapi.data.dao.ProviderDao
 import com.kurisuapi.data.entity.ModelEntity
 import com.kurisuapi.data.entity.ProviderEntity
+import com.kurisuapi.util.EncryptedSettings
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import javax.inject.Inject
@@ -13,28 +15,97 @@ import javax.inject.Singleton
 @Singleton
 class ProviderRepository @Inject constructor(
     private val providerDao: ProviderDao,
-    private val modelDao: ModelDao
+    private val modelDao: ModelDao,
+    private val encryptedSettings: EncryptedSettings
 ) {
-    fun getAll(): Flow<List<ProviderEntity>> = providerDao.getAll()
+    companion object {
+        private const val PROVIDER_KEY_PREFIX = "provider_api_key_"
+    }
 
-    fun getEnabled(): Flow<List<ProviderEntity>> = providerDao.getEnabled()
+    private fun secKey(id: Long) = "$PROVIDER_KEY_PREFIX$id"
 
-    suspend fun getEnabledOnce(): List<ProviderEntity> = providerDao.getEnabledOnce()
+    /** 从加密存储读取 API Key，同时处理旧明文 Key 的自动迁移 */
+    private fun decryptKey(id: Long, entityApiKey: String): String {
+        if (id <= 0) return entityApiKey
+        val encrypted = encryptedSettings.getString(secKey(id), "")
+        return if (encrypted.isNotEmpty()) {
+            encrypted
+        } else if (entityApiKey.isNotBlank()) {
+            // 迁移：旧明文 Key 尚未加密，自动搬入加密存储
+            encryptedSettings.putString(secKey(id), entityApiKey)
+            entityApiKey
+        } else {
+            ""
+        }
+    }
 
-    suspend fun getById(id: Long): ProviderEntity? = providerDao.getById(id)
+    /** 将 API Key 存入加密存储，返回替换后的实体（apiKey 字段清空） */
+    private fun encryptKey(id: Long, entity: ProviderEntity): ProviderEntity {
+        if (id <= 0) return entity
+        return if (entity.apiKey.isNotBlank()) {
+            encryptedSettings.putString(secKey(id), entity.apiKey)
+            entity.copy(apiKey = "")
+        } else {
+            entity
+        }
+    }
 
-    suspend fun getDefault(): ProviderEntity? = providerDao.getDefault()
+    /** 移除加密存储中的 API Key */
+    private fun removeKey(id: Long) {
+        if (id > 0) encryptedSettings.remove(secKey(id))
+    }
 
-    fun observeDefault(): Flow<ProviderEntity?> = providerDao.observeDefault()
+    /** 为实体填充解密后的 API Key */
+    private fun populateKey(entity: ProviderEntity?): ProviderEntity? {
+        return entity?.copy(apiKey = decryptKey(entity.id, entity.apiKey))
+    }
 
-    suspend fun insert(provider: ProviderEntity): Long = providerDao.insert(provider)
+    fun getAll(): Flow<List<ProviderEntity>> =
+        providerDao.getAll().map { list -> list.map { it.copy(apiKey = decryptKey(it.id, it.apiKey)) } }
 
-    suspend fun update(provider: ProviderEntity) = providerDao.update(provider)
+    fun getEnabled(): Flow<List<ProviderEntity>> =
+        providerDao.getEnabled().map { list -> list.map { it.copy(apiKey = decryptKey(it.id, it.apiKey)) } }
 
-    suspend fun delete(provider: ProviderEntity) = providerDao.delete(provider)
+    suspend fun getEnabledOnce(): List<ProviderEntity> =
+        providerDao.getEnabledOnce().map { it.copy(apiKey = decryptKey(it.id, it.apiKey)) }
+
+    suspend fun getById(id: Long): ProviderEntity? =
+        populateKey(providerDao.getById(id))
+
+    suspend fun getDefault(): ProviderEntity? =
+        populateKey(providerDao.getDefault())
+
+    fun observeDefault(): Flow<ProviderEntity?> =
+        providerDao.observeDefault().map { populateKey(it) }
+
+    suspend fun insert(provider: ProviderEntity): Long {
+        val id = providerDao.insert(provider)
+        // 新插入后立即加密 Key（此时 id 已生成）
+        if (provider.apiKey.isNotBlank()) {
+            encryptedSettings.putString(secKey(id), provider.apiKey)
+            providerDao.getById(id)?.let { existing ->
+                providerDao.update(existing.copy(apiKey = ""))
+            }
+        }
+        return id
+    }
+
+    suspend fun update(provider: ProviderEntity) {
+        // 如果有新的 API Key，写入加密存储；如果被清空则移除旧 Key
+        if (provider.apiKey.isNotBlank()) {
+            encryptedSettings.putString(secKey(provider.id), provider.apiKey)
+        } else {
+            encryptedSettings.remove(secKey(provider.id))
+        }
+        providerDao.update(provider.copy(apiKey = ""))
+    }
+
+    suspend fun delete(provider: ProviderEntity) {
+        removeKey(provider.id)
+        providerDao.delete(provider)
+    }
 
     suspend fun setDefault(id: Long) {
-        // Bug 3 fix: use atomic transaction
         providerDao.setDefaultAtomic(id)
     }
 

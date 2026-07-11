@@ -25,7 +25,7 @@ fun EmotionBar(
     Row(
         modifier = modifier
             .fillMaxWidth()
-            .padding(vertical = 3.dp),
+            .padding(vertical = sdp(3.dp)),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Text(

@@ -2,17 +2,22 @@ package com.kurisuapi.domain.engine
 
 import com.kurisuapi.data.entity.EmotionStateEntity
 import com.kurisuapi.data.repository.EmotionRepository
+import com.kurisuapi.data.repository.SettingsRepository
 import com.kurisuapi.util.containsAny
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import java.time.LocalTime
 import javax.inject.Inject
 import javax.inject.Singleton
 import kotlin.math.max
 import kotlin.math.min
+import kotlin.math.roundToInt
 
 @Singleton
 class EmotionEngine @Inject constructor(
-    private val emotionRepository: EmotionRepository
+    private val emotionRepository: EmotionRepository,
+    private val circadianModulator: CircadianModulator,
+    private val settingsRepository: SettingsRepository
 ) {
     private val emotionMutex = Mutex()
 
@@ -24,6 +29,34 @@ class EmotionEngine @Inject constructor(
     }
 
     /**
+     * 原子性地应用孤独感衰减（修复读取-修改-写入竞态条件）。
+     * 在互斥锁内完成：检查时间戳 → 修改情绪 → 写入数据库 → 更新时间戳。
+     *
+     * @param characterId 角色 ID
+     * @param lonelinessIncrease 孤独感增加量（已由调用方按天数计算好）
+     * @return 是否实际执行了衰减
+     */
+    suspend fun applyLonelinessDecay(characterId: Long, lonelinessIncrease: Int): Boolean = emotionMutex.withLock {
+        if (lonelinessIncrease <= 0) return@withLock false
+
+        // 用独立的衰减时间戳而不是 emotion.updatedAt，防止聊天频繁导致衰减被永久抑制
+        val lastDecayAt = settingsRepository.getLonelinessDecayAt(characterId)
+        val now = System.currentTimeMillis()
+        val hoursSinceLastDecay = if (lastDecayAt > 0) (now - lastDecayAt) / (1000 * 60 * 60) else 999L
+        if (hoursSinceLastDecay < 20) return@withLock false
+
+        val current = getEmotion(characterId)
+        val newLonely = (current.lonely + lonelinessIncrease).coerceIn(0, 80)
+        if (newLonely != current.lonely) {
+            emotionRepository.insertOrUpdate(
+                current.copy(lonely = newLonely, updatedAt = now)
+            )
+        }
+        settingsRepository.setLonelinessDecayAt(characterId, now)
+        true
+    }
+
+    /**
      * 更新角色情绪。
      *
      * @param personality 角色性格描述文本（如"温柔体贴，带一点傲娇"）。
@@ -31,6 +64,7 @@ class EmotionEngine @Inject constructor(
      */
     suspend fun updateEmotion(characterId: Long, userMessage: String, personality: String = "") = emotionMutex.withLock {
         val current = getEmotion(characterId)
+        val circadianOn = settingsRepository.isCircadianEnabled()
 
         // 第一层：关键词分析（纯文本 → 情绪变化量）
         val adjustments = analyzeMessage(userMessage)
@@ -63,8 +97,9 @@ class EmotionEngine @Inject constructor(
             updatedAt = System.currentTimeMillis()
         )
 
-        // 自然衰减
-        val decayed = applyDecay(updated)
+        // 自然衰减（基于流逝时间，上限 2 小时，避免长间隔导致关键词变化完全归零）
+        val elapsedMs = (System.currentTimeMillis() - current.updatedAt).coerceAtMost(2 * 60 * 60 * 1000L)
+        val decayed = computePassiveDecay(updated, elapsedMs, circadianOn)
         emotionRepository.insertOrUpdate(decayed)
     }
 
@@ -111,7 +146,7 @@ class EmotionEngine @Inject constructor(
             delta *= (1.0f - resistance)
         }
 
-        return clamp(currentValue + delta.toInt())
+        return clamp(currentValue + delta.roundToInt())
     }
 
     /**
@@ -231,7 +266,12 @@ class EmotionEngine @Inject constructor(
         }
 
         // Angry keywords
-        if (lower.containsAny("生气", "愤怒", "讨厌", "烦", "恨", "angry", "hate")) {
+        // Bug 2 fix: 加否定前缀检查，避免"别生气""不讨厌"等安抚话语被误判为愤怒
+        val hasAngryWord = lower.containsAny("生气", "愤怒", "讨厌", "烦", "恨", "angry", "hate")
+        val isAngryNegated = lower.containsAny("别生气", "不要生气", "不生气", "没生气",
+            "别愤怒", "不要愤怒", "不讨厌", "别讨厌", "不要讨厌",
+            "不烦", "别烦", "不恨", "别恨")
+        if (hasAngryWord && !isAngryNegated) {
             angry += 5
         }
 
@@ -254,22 +294,54 @@ class EmotionEngine @Inject constructor(
         return EmotionDelta(happy, sad, angry, lonely, affection)
     }
 
-    private fun applyDecay(emotion: EmotionStateEntity): EmotionStateEntity {
+    private fun applyDecay(emotion: EmotionStateEntity, circadianOn: Boolean): EmotionStateEntity {
+        val shift = circadianModulator.getShift(LocalTime.now().hour, circadianOn)
+        val happyTarget = (50 + shift.happyShift).coerceIn(0, 100)
+        val lonelyTarget = (20 + shift.lonelyShift).coerceIn(0, 100)
         fun decay(value: Int, target: Int, rate: Int = 2): Int {
             return if (value > target) max(target, value - rate)
             else if (value < target) min(target, value + rate)
             else value
         }
         return emotion.copy(
-            happy = decay(emotion.happy, 50),
+            happy = decay(emotion.happy, happyTarget),
             sad = decay(emotion.sad, 0),
             angry = decay(emotion.angry, 0),
-            lonely = decay(emotion.lonely, 20),
+            lonely = decay(emotion.lonely, lonelyTarget),
             affection = decay(emotion.affection, 50)
         )
     }
 
     private fun clamp(value: Int): Int = max(0, min(100, value))
+
+    /**
+     * 计算经过时间后的被动情绪衰减（不持久化，仅返回计算后的实体）。
+     * 用于主动消息等场景：获取"当前实际感受"而非上次更新时的旧值。
+     *
+     * 衰减规则：
+     * - 开心/难过/生气/好感 → 每小时向基线回归 3 点
+     * - 孤独 → 每小时 +2（越久不聊天越孤独），上限 +30
+     */
+    fun computePassiveDecay(emotion: EmotionStateEntity, elapsedMs: Long, circadianOn: Boolean = true): EmotionStateEntity {
+        val hours = elapsedMs / 3_600_000f
+        val shift = circadianModulator.getShift(LocalTime.now().hour, circadianOn)
+        val happyTarget = (50 + shift.happyShift).coerceIn(0, 100)
+        val lonelyTarget = (20 + shift.lonelyShift).coerceIn(0, 100)
+        return emotion.copy(
+            happy = regress(emotion.happy, happyTarget, hours),
+            sad = regress(emotion.sad, 0, hours),
+            angry = regress(emotion.angry, 0, hours),
+            lonely = (emotion.lonely + (hours * 2f).toInt().coerceIn(0, 30)).coerceIn(0, 100),
+            affection = regress(emotion.affection, 50, hours)
+        )
+    }
+
+    private fun regress(value: Int, target: Int, hours: Float): Int {
+        val rate = (hours * 3f).toInt()
+        return if (value > target) max(target, value - rate)
+        else if (value < target) min(target, value + rate)
+        else value
+    }
 
     private data class EmotionDelta(
         val happy: Int = 0,

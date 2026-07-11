@@ -22,6 +22,7 @@ fun RelationshipDetailScreen(
     viewModel: RelationshipDetailViewModel = hiltViewModel()
 ) {
     val relationship by viewModel.relationship.collectAsState()
+    val isLoaded by viewModel.isLoaded.collectAsState()
 
     Scaffold(
         topBar = {
@@ -32,14 +33,16 @@ fun RelationshipDetailScreen(
                         Icon(Icons.Outlined.ArrowBack, contentDescription = "返回")
                     }
                 },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.92f)
-                )
+                colors = com.kurisuapi.ui.theme.topBarColors()
             )
         }
     ) { paddingValues ->
-        val rel = relationship
-        if (rel != null) {
+        val currentRelationship = relationship
+        if (!isLoaded) {
+            Box(modifier = Modifier.fillMaxSize().padding(paddingValues), contentAlignment = Alignment.Center) {
+                CircularProgressIndicator()
+            }
+        } else if (currentRelationship != null) {
             Column(
                 modifier = Modifier
                     .fillMaxSize()
@@ -60,16 +63,16 @@ fun RelationshipDetailScreen(
                     ) {
                         Text("当前关系", style = MaterialTheme.typography.titleMedium)
                         Text(
-                            rel.level,
+                            currentRelationship.level,
                             style = MaterialTheme.typography.displaySmall,
                             fontWeight = FontWeight.SemiBold,
                             color = MaterialTheme.colorScheme.primary
                         )
                         Spacer(modifier = Modifier.height(sdp(8.dp)))
-                        Text("关系值: ${rel.score}", style = MaterialTheme.typography.titleLarge)
+                        Text("关系值: ${currentRelationship.score}", style = MaterialTheme.typography.titleLarge)
                         Spacer(modifier = Modifier.height(sdp(12.dp)))
                         LinearProgressIndicator(
-                            progress = { (rel.score / 100f).coerceIn(0f, 1f) },
+                            progress = { (currentRelationship.score / 100f).coerceIn(0f, 1f) },
                             modifier = Modifier.fillMaxWidth().height(sdp(8.dp)),
                         )
                     }
@@ -91,13 +94,13 @@ fun RelationshipDetailScreen(
                             ) {
                                 Text(
                                     text = level,
-                                    fontWeight = if (rel.level == level) FontWeight.SemiBold else FontWeight.Normal,
-                                    color = if (rel.score >= threshold) MaterialTheme.colorScheme.primary
+                                    fontWeight = if (currentRelationship.level == level) FontWeight.SemiBold else FontWeight.Normal,
+                                    color = if (currentRelationship.score >= threshold) MaterialTheme.colorScheme.primary
                                     else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
                                 )
                                 Text(
                                     text = "${threshold}+",
-                                    color = if (rel.score >= threshold) MaterialTheme.colorScheme.primary
+                                    color = if (currentRelationship.score >= threshold) MaterialTheme.colorScheme.primary
                                     else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
                                 )
                             }
@@ -122,11 +125,14 @@ fun RelationshipDetailScreen(
                 }
             }
         } else {
-            Box(
-                modifier = Modifier.fillMaxSize().padding(paddingValues),
-                contentAlignment = Alignment.Center
-            ) {
-                CircularProgressIndicator()
+            Box(modifier = Modifier.fillMaxSize().padding(paddingValues), contentAlignment = Alignment.Center) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text("暂无关系数据", style = MaterialTheme.typography.bodyLarge,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f))
+                    Spacer(modifier = Modifier.height(sdp(8.dp)))
+                    Text("与角色开始聊天后会自动生成", style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.3f))
+                }
             }
         }
     }

@@ -6,7 +6,9 @@ import com.google.gson.annotations.SerializedName
 
 data class ChatMessage(
     val role: String, // "system", "user", "assistant"
-    val content: String
+    val content: String,
+    @SerializedName("reasoning_content")
+    val reasoningContent: String? = null
 )
 
 data class ChatResponse(

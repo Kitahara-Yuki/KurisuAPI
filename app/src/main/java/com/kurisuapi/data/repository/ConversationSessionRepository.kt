@@ -1,9 +1,12 @@
 package com.kurisuapi.data.repository
 
+import androidx.room.withTransaction
+import com.kurisuapi.data.dao.ChatHistoryDao
+import com.kurisuapi.data.dao.ConversationIndexDao
 import com.kurisuapi.data.dao.ConversationSessionDao
+import com.kurisuapi.data.dao.MemoryDao
 import com.kurisuapi.data.entity.ConversationSessionEntity
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import javax.inject.Inject
@@ -11,7 +14,11 @@ import javax.inject.Singleton
 
 @Singleton
 class ConversationSessionRepository @Inject constructor(
-    private val sessionDao: ConversationSessionDao
+    private val db: com.kurisuapi.data.database.KurisuDatabase,
+    private val sessionDao: ConversationSessionDao,
+    private val chatHistoryDao: ChatHistoryDao,
+    private val indexDao: ConversationIndexDao,
+    private val memoryDao: MemoryDao
 ) {
     fun observeAllByCharacter(characterId: Long): Flow<List<ConversationSessionEntity>> =
         sessionDao.observeAllByCharacter(characterId)
@@ -26,7 +33,7 @@ class ConversationSessionRepository @Inject constructor(
         sessionDao.getById(id)
 
     suspend fun getAllOnce(characterId: Long): List<ConversationSessionEntity> =
-        observeAllByCharacter(characterId).firstOrNull() ?: emptyList()
+        sessionDao.getAllByCharacterOnce(characterId)
 
     suspend fun insert(session: ConversationSessionEntity): Long =
         sessionDao.insert(session)
@@ -49,17 +56,28 @@ class ConversationSessionRepository @Inject constructor(
     suspend fun updateLastPromptTokens(id: Long, tokens: Int) =
         sessionDao.updateLastPromptTokens(id, tokens)
 
-    suspend fun deleteById(id: Long) =
+    /** 硬删除会话，同步清理关联数据（事务保护） */
+    suspend fun deleteById(id: Long) = db.withTransaction {
+        chatHistoryDao.deleteBySession(id)
+        indexDao.deleteBySession(id)
+        memoryDao.deleteBySessionPermanent(id)
         sessionDao.deleteById(id)
+    }
 
     suspend fun getAllActiveIds(characterId: Long): List<Long> =
         sessionDao.getAllActiveIds(characterId)
 
-    suspend fun softDelete(id: Long) =
+    /** 软删除会话，同步软删除关联记忆（事务保护） */
+    suspend fun softDelete(id: Long) = db.withTransaction {
         sessionDao.softDelete(id)
+        memoryDao.softDeleteBySession(id)
+    }
 
-    suspend fun restore(id: Long) =
+    /** 恢复会话，同步恢复关联记忆（事务保护） */
+    suspend fun restore(id: Long) = db.withTransaction {
         sessionDao.restore(id)
+        memoryDao.restoreBySession(id)
+    }
 
     fun observeDeletedByCharacter(characterId: Long): Flow<List<ConversationSessionEntity>> =
         sessionDao.observeDeletedByCharacter(characterId)
@@ -78,7 +96,7 @@ class ConversationSessionRepository @Inject constructor(
      * 供微信自动回复等外部调用使用。
      */
     suspend fun getOrCreateActiveSession(characterId: Long): Long = sessionMutex.withLock {
-        val sessions = observeAllByCharacter(characterId).firstOrNull() ?: emptyList()
+        val sessions = sessionDao.getAllByCharacterOnce(characterId)
         val activeSession = sessions.firstOrNull { !it.isArchived }
         return if (activeSession != null) {
             activeSession.id

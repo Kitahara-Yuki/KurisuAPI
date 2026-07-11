@@ -1,5 +1,6 @@
 package com.kurisuapi.ui.screen.character
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -29,10 +30,14 @@ fun CharacterListScreen(
     val characters by characterViewModel.characters.collectAsState()
     val activeCharacterId by listViewModel.activeCharacterId.collectAsState()
     var characterToDelete by remember { mutableStateOf<CharacterEntity?>(null) }
+    var showCreateDialog by remember { mutableStateOf(false) }
 
     characterToDelete?.let { character ->
         AlertDialog(
             onDismissRequest = { characterToDelete = null },
+            containerColor = MaterialTheme.colorScheme.surface,
+            titleContentColor = MaterialTheme.colorScheme.onSurface,
+            textContentColor = MaterialTheme.colorScheme.onSurfaceVariant,
             title = { Text("确认删除") },
             text = { Text("确定要删除角色「${character.name}」吗？\n\n此操作将同时删除该角色的所有聊天记录、记忆、情绪和关系数据，且不可恢复。") },
             confirmButton = {
@@ -52,6 +57,66 @@ fun CharacterListScreen(
         )
     }
 
+    if (showCreateDialog) {
+        AlertDialog(
+            onDismissRequest = { showCreateDialog = false },
+            containerColor = MaterialTheme.colorScheme.surface,
+            titleContentColor = MaterialTheme.colorScheme.onSurface,
+            textContentColor = MaterialTheme.colorScheme.onSurfaceVariant,
+            title = { Text("创建角色", fontWeight = FontWeight.SemiBold) },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(sdp(12.dp))) {
+                    Card(
+                        modifier = Modifier.fillMaxWidth().clickable {
+                            showCreateDialog = false
+                            onNavigate(Screen.CharacterGenerate.route)
+                        },
+                        colors = CardDefaults.cardColors(
+                            containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f)
+                        ),
+                        shape = MaterialTheme.shapes.medium
+                    ) {
+                        Column(modifier = Modifier.padding(sdp(16.dp))) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(Icons.Outlined.AutoAwesome, contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(sdp(22.dp)))
+                                Spacer(modifier = Modifier.width(sdp(10.dp)))
+                                Text("自动生成", fontWeight = FontWeight.SemiBold, style = MaterialTheme.typography.titleSmall)
+                            }
+                            Spacer(modifier = Modifier.height(sdp(6.dp)))
+                            Text("按照要求自动生成角色", style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
+                        }
+                    }
+                    Card(
+                        modifier = Modifier.fillMaxWidth().clickable {
+                            showCreateDialog = false
+                            onNavigate(Screen.CharacterEdit.createRoute())
+                        },
+                        colors = CardDefaults.cardColors(
+                            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+                        ),
+                        shape = MaterialTheme.shapes.medium
+                    ) {
+                        Column(modifier = Modifier.padding(sdp(16.dp))) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(Icons.Outlined.Edit, contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(sdp(22.dp)))
+                                Spacer(modifier = Modifier.width(sdp(10.dp)))
+                                Text("手动创建", fontWeight = FontWeight.SemiBold, style = MaterialTheme.typography.titleSmall)
+                            }
+                            Spacer(modifier = Modifier.height(sdp(6.dp)))
+                            Text("自己逐项填写", style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
+                        }
+                    }
+                }
+            },
+            confirmButton = {},
+            dismissButton = { TextButton(onClick = { showCreateDialog = false }) { Text("取消") } }
+        )
+    }
+
     Scaffold(
         topBar = {
             TopAppBar(
@@ -62,13 +127,11 @@ fun CharacterListScreen(
                     }
                 },
                 actions = {
-                    IconButton(onClick = { onNavigate(Screen.CharacterEdit.createRoute()) }) {
+                    IconButton(onClick = { showCreateDialog = true }) {
                         Icon(Icons.Outlined.Add, contentDescription = "添加角色")
                     }
                 },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.92f)
-                )
+                colors = com.kurisuapi.ui.theme.topBarColors()
             )
         }
     ) { paddingValues ->
@@ -90,7 +153,7 @@ fun CharacterListScreen(
                     Text("还没有角色", style = MaterialTheme.typography.bodyLarge,
                         color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f))
                     Spacer(modifier = Modifier.height(sdp(8.dp)))
-                    Button(onClick = { onNavigate(Screen.CharacterEdit.createRoute()) }) {
+                    Button(onClick = { showCreateDialog = true }) {
                         Text("创建第一个角色")
                     }
                 }

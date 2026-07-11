@@ -25,6 +25,8 @@ data class ProviderEntity(
     val reasoningEffort: String = "high",           // 思考强度: "low", "medium", "high"（仅 OpenAI 兼容格式有效）
     val thinkingBudgetTokens: Int = 0,              // 思考预算 token 数，0=自动计算（Anthropic/Gemini 有效）
     val contextWindow: Long = 0,                     // 上下文窗口大小（token），0=未设置/自动从模型获取
+    val frequencyPenalty: Double = 0.0,              // 频率惩罚 -2.0 ~ 2.0，0=Provider 级别不覆盖
+    val presencePenalty: Double = 0.0,               // 存在惩罚 -2.0 ~ 2.0，0=Provider 级别不覆盖
     val createdAt: Long = System.currentTimeMillis(),
     val updatedAt: Long = System.currentTimeMillis()
 )

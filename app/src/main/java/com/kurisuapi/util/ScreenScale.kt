@@ -1,7 +1,7 @@
 package com.kurisuapi.util
 
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.staticCompositionLocalOf
+import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
@@ -10,7 +10,7 @@ import androidx.compose.ui.unit.sp
 /**
  * 全局屏幕缩放比例，以 360dp 宽为标准。
  */
-val LocalScreenScale = staticCompositionLocalOf { 1f }
+val LocalScreenScale = compositionLocalOf { 1f }
 
 /**
  * 缩放 dp 值以适配不同屏幕尺寸。

@@ -11,6 +11,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.kurisuapi.ui.component.EmotionBar
@@ -32,8 +33,6 @@ fun HomeScreen(
     val emotion by viewModel.emotion.collectAsState()
     val relationship by viewModel.relationship.collectAsState()
     val recentMessages by viewModel.recentMessages.collectAsState()
-    val wechatStatus by viewModel.wechatStatus.collectAsState()
-    val aiStatus by viewModel.aiStatus.collectAsState()
     val connectionState by weChatViewModel.connectionState.collectAsState()
 
     Scaffold(
@@ -45,9 +44,7 @@ fun HomeScreen(
                         fontWeight = FontWeight.SemiBold
                     )
                 },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.92f)
-                )
+                colors = com.kurisuapi.ui.theme.topBarColors()
             )
         },
     ) { paddingValues ->
@@ -83,11 +80,13 @@ fun HomeScreen(
                         }
                     )
                     StatusCard(
-                        title = "AI",
-                        status = aiStatus,
-                        icon = Icons.Outlined.SmartToy,
-                        color = AppleBlue,
-                        modifier = Modifier.weight(1f)
+                        title = "记忆",
+                        status = "管理记忆",
+                        icon = Icons.Outlined.Psychology,
+                        color = AppleIndigo,
+                        modifier = Modifier.weight(1f).clickable {
+                            character?.let { onNavigate(Screen.MemoryList.createRoute(it.id)) }
+                        }
                     )
                 }
             }
@@ -109,13 +108,17 @@ fun HomeScreen(
                             Text(
                                 text = "当前角色: ${char.name}",
                                 style = MaterialTheme.typography.titleLarge,
-                                fontWeight = FontWeight.SemiBold
+                                fontWeight = FontWeight.SemiBold,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
                             )
                             if (char.personality.isNotBlank()) {
                                 Text(
                                     text = char.personality,
                                     style = MaterialTheme.typography.bodyMedium,
-                                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
                                 )
                             }
                         } else {
@@ -237,9 +240,19 @@ fun HomeScreen(
                         leadingContent = {
                             Icon(
                                 if (msg.sender == "user") Icons.Outlined.Person else Icons.Outlined.SmartToy,
-                                contentDescription = null
+                                contentDescription = if (msg.sender == "user") "用户" else "AI"
                             )
                         }
+                    )
+                }
+            } else {
+                // 空状态提示
+                item {
+                    Text(
+                        text = "暂无消息",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f),
+                        modifier = Modifier.padding(vertical = sdp(8.dp))
                     )
                 }
             }

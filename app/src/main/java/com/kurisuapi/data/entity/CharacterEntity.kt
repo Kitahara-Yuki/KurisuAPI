@@ -16,6 +16,7 @@ data class CharacterEntity(
     val speakingStyle: String = "",
     val background: String = "",
     val systemPrompt: String = "",
+    val exampleDialogues: String = "",  // 示例对话，用于 Prompt 中注入角色说话风格
     val createdAt: Long = System.currentTimeMillis(),
     val updatedAt: Long = System.currentTimeMillis()
 )

@@ -3,6 +3,7 @@ package com.kurisuapi.ui.screen.chat
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
+import com.kurisuapi.ui.theme.LocalIsDarkTheme
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -14,6 +15,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -26,13 +28,14 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.kurisuapi.data.entity.ChatHistoryEntity
+import com.kurisuapi.ui.component.BlurOverlayImage
 import com.kurisuapi.ui.component.ChatBubble
 import com.kurisuapi.ui.component.LiquidGlassContainer
+import com.kurisuapi.ui.theme.LocalActiveTheme
+import com.kurisuapi.util.parseColor
 import com.kurisuapi.ui.viewmodel.ContextUsage
 import com.kurisuapi.ui.viewmodel.ChatViewModel
 import com.kurisuapi.util.TokenEstimator
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.isActive
 import com.kurisuapi.util.sdp
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.platform.LocalLifecycleOwner
@@ -61,11 +64,11 @@ fun ChatLogScreen(
     val session by viewModel.session.collectAsState()
     val messages by viewModel.messages.collectAsState()
     val isLoading by viewModel.isLoading.collectAsState()
-    val streamingText by viewModel.streamingText.collectAsState()
+    val typewriterText by viewModel.typewriterText.collectAsState()
     val isStreaming by viewModel.isStreaming.collectAsState()
     val thinkingSeconds by viewModel.thinkingSeconds.collectAsState()
     val error by viewModel.error.collectAsState()
-    var inputText by remember { mutableStateOf("") }
+    var inputText by rememberSaveable { mutableStateOf("") }
     val listState = rememberLazyListState()
 
     val isArchived = session?.isArchived == true
@@ -75,37 +78,43 @@ fun ChatLogScreen(
     val warnThreshold = if (usage.thinkingEnabled) 0.70f else 0.80f
     val contextOverWarn = usage.totalTokens > 0 && usage.usedTokens > usage.totalTokens * warnThreshold
 
-    val lastAiMessage = messages.lastOrNull { it.sender == "ai" }
-    val streamingAlreadyInDb = lastAiMessage != null && lastAiMessage.content == streamingText
-
     LaunchedEffect(sessionId) {
         viewModel.loadSession(sessionId)
     }
 
     LaunchedEffect(messages.size) {
-        if (messages.isNotEmpty() && !isStreaming) {
-            listState.animateScrollToItem(messages.size - 1)
+        if (messages.isNotEmpty() && typewriterText.isBlank()) {
+            listState.scrollToItem(messages.size - 1)
         }
     }
 
-    LaunchedEffect(isStreaming) {
-        if (isStreaming) {
-            while (isActive) {
-                delay(100)
-                val layoutInfo = listState.layoutInfo
-                val totalItems = layoutInfo.totalItemsCount
-                if (totalItems == 0) continue
-                val lastView = layoutInfo.visibleItemsInfo.lastOrNull() ?: continue
-                val distToBottom = layoutInfo.viewportEndOffset - lastView.offset - lastView.size
-                val isNearBottom = distToBottom < 200
-                if (isNearBottom) {
-                    listState.scrollToItem(totalItems - 1)
+    // 流式/打字机期间自动跟随滚动
+    if (isStreaming || typewriterText.isNotBlank()) {
+        val autoScrollEnabled by remember { mutableStateOf(true) }
+        LaunchedEffect(autoScrollEnabled) {
+            snapshotFlow {
+                val info = listState.layoutInfo
+                val last = info.visibleItemsInfo.lastOrNull()
+                if (last != null) info.viewportEndOffset - last.offset - last.size else 999
+            }.collect { distToBottom ->
+                if (distToBottom < 200) {
+                    val total = listState.layoutInfo.totalItemsCount
+                    if (total > 0) listState.scrollToItem(total - 1)
                 }
             }
         }
     }
 
-    Scaffold(
+    val isDark = LocalIsDarkTheme.current
+    val theme = LocalActiveTheme.current
+    val hasChatBgImage = !theme?.chatBgImagePath.isNullOrBlank()
+    val chatBackground = theme?.chatBgColorHex?.takeIf { it.isNotBlank() }?.parseColor()
+        ?: if (isDark) Color(0xFF393C42) else Color(0xFFFFFFFF)  // 浅色模式纯白背景
+
+    Box(modifier = Modifier.fillMaxSize()) {
+        Scaffold(
+            // 始终用背景颜色打底，图片（如果有）作为装饰层覆盖在上方
+            containerColor = chatBackground,
         topBar = {
             TopAppBar(
                 title = {
@@ -144,9 +153,7 @@ fun ChatLogScreen(
                         )
                     }
                 },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.92f)
-                )
+                colors = com.kurisuapi.ui.theme.topBarColors()
             )
         }
     ) { paddingValues ->
@@ -159,6 +166,16 @@ fun ChatLogScreen(
                 .padding(horizontal = sdp(12.dp), vertical = sdp(8.dp)),
             bottomSpacing = sdp(26.dp),
             background = {
+                // 自定义主题背景图片（颜色通过 Scaffold containerColor 始终打底）
+                if (hasChatBgImage) {
+                    BlurOverlayImage(
+                        imagePath = theme!!.chatBgImagePath,
+                        blurRadius = theme.chatBgBlurRadius,
+                        dimPercent = theme.chatBgDimPercent,
+                        modifier = Modifier.fillMaxSize(),
+                    )
+                }
+
                 error?.let { err ->
                     Card(
                         modifier = Modifier.fillMaxWidth().padding(sdp(8.dp)),
@@ -171,24 +188,55 @@ fun ChatLogScreen(
                     }
                 }
 
+                // 打字机运行时隐藏最后一条 AI 消息（正在被逐字动画显示，避免重复）
+                val lastAiMsg = messages.lastOrNull()?.takeIf { it.sender == "ai" }
+                val typewriterCaughtUp = lastAiMsg != null &&
+                    typewriterText.isNotBlank() &&
+                    typewriterText == lastAiMsg.content
+
+                val displayMessages by remember {
+                    derivedStateOf {
+                        if (!typewriterCaughtUp && typewriterText.isNotBlank()
+                            && messages.isNotEmpty() && messages.last().sender == "ai") {
+                            messages.dropLast(1)
+                        } else messages
+                    }
+                }
+
                 LazyColumn(
                     modifier = Modifier.fillMaxSize().padding(horizontal = sdp(16.dp)),
                     state = listState,
                     verticalArrangement = Arrangement.spacedBy(sdp(8.dp)),
                     contentPadding = PaddingValues(top = sdp(8.dp), bottom = sdp(106.dp))
                 ) {
-                    items(messages, key = { it.id }) { message ->
+                    items(displayMessages, key = { it.id }) { message ->
                         ChatBubble(message = message, modifier = Modifier)
                     }
-                    if (isStreaming && streamingText.isNotBlank() && !streamingAlreadyInDb) {
+                    if (displayMessages.isEmpty() && !isLoading) {
+                        item(key = "empty_guide") {
+                            Box(
+                                modifier = Modifier.fillMaxWidth().padding(top = sdp(80.dp)),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(
+                                    "你好，想聊聊吗？",
+                                    style = MaterialTheme.typography.bodyLarge,
+                                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f)
+                                )
+                            }
+                        }
+                    }
+                    if (!typewriterCaughtUp && typewriterText.isNotBlank()) {
+                        // key 固定即可：打字机动画由 ViewModel.typewriterText 驱动，
+                        // 不依赖 Composable 的 remember 状态，key 变化也不会丢失进度。
                         item(key = "streaming") {
                             SmoothStreamingBubble(
-                                fullText = streamingText,
+                                fullText = typewriterText,
                                 characterId = character?.id ?: 0,
                                 sessionId = sessionId
                             )
                         }
-                    } else if (isLoading && streamingText.isBlank()) {
+                    } else if (!typewriterCaughtUp && isLoading && typewriterText.isBlank()) {
                         item {
                             Row(modifier = Modifier.padding(sdp(8.dp))) {
                                 CircularProgressIndicator(modifier = Modifier.size(sdp(20.dp)), strokeWidth = 2.dp)
@@ -214,7 +262,7 @@ fun ChatLogScreen(
                     ) {
                         Icon(
                             Icons.Outlined.Lock,
-                            contentDescription = null,
+                            contentDescription = "已归档",
                             tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f),
                             modifier = Modifier.size(sdp(16.dp))
                         )
@@ -298,6 +346,8 @@ fun ChatLogScreen(
     if (showWarningDialog) {
         AlertDialog(
             onDismissRequest = { showWarningDialog = false },
+            containerColor = MaterialTheme.colorScheme.surface,
+            textContentColor = MaterialTheme.colorScheme.onSurface,
             icon = { Icon(Icons.Outlined.Warning, contentDescription = null, tint = MaterialTheme.colorScheme.error) },
             title = { Text("上下文即将用完") },
             text = {
@@ -322,6 +372,8 @@ fun ChatLogScreen(
         AlertDialog(
             onDismissRequest = { showContextDialog = false },
             title = { Text("上下文额度") },
+            containerColor = MaterialTheme.colorScheme.surface,
+            textContentColor = MaterialTheme.colorScheme.onSurface,
             text = {
                 Column {
                     if (usage.modelDisplay.isNotBlank()) {
@@ -393,25 +445,16 @@ fun ChatLogScreen(
             confirmButton = { TextButton(onClick = { showContextDialog = false }) { Text("关闭") } }
         )
     }
+    } // Box closing
 }
 
 @Composable
 private fun SmoothStreamingBubble(fullText: String, characterId: Long, sessionId: Long) {
-    var displayPosition by remember { mutableIntStateOf(0) }
-    val currentFullText by rememberUpdatedState(fullText)
-    LaunchedEffect(Unit) {
-        while (isActive) {
-            val target = currentFullText.length
-            val pos = displayPosition
-            if (pos < target) { displayPosition = pos + 1; delay(40) }
-            else { delay(80) }
-        }
-    }
-    val displayText = fullText.take(displayPosition)
+    // 打字机节奏由 ChatViewModel.typewriterText 控制，此处直接渲染
     ChatBubble(
         message = ChatHistoryEntity(
             id = -1, characterId = characterId, sessionId = sessionId,
-            sender = "ai", content = displayText
+            sender = "ai", content = fullText
         )
     )
 }
@@ -422,13 +465,14 @@ private fun CircularContextRing(usage: ContextUsage, thinkingEnabled: Boolean = 
     val ratio = if (hasTotal) (usage.usedTokens.toFloat() / usage.totalTokens).coerceIn(0f, 1f) else 0f
     val yellowAt = if (thinkingEnabled) 0.60f else 0.70f
     val redAt = if (thinkingEnabled) 0.80f else 0.90f
+    // 固定颜色：不受主题色影响，确保在任何顶栏背景下都可见
     val progressColor = when {
-        !hasTotal -> MaterialTheme.colorScheme.onSurface.copy(alpha = 0.3f)
-        ratio > redAt -> MaterialTheme.colorScheme.error
-        ratio > yellowAt -> MaterialTheme.colorScheme.tertiary
-        else -> MaterialTheme.colorScheme.primary
+        !hasTotal -> Color.White.copy(alpha = 0.4f)
+        ratio > redAt -> Color(0xFFFF453A)   // 红色警告
+        ratio > yellowAt -> Color(0xFFFFD60A) // 黄色注意
+        else -> Color.White                   // 白色正常
     }
-    val trackColor = MaterialTheme.colorScheme.surfaceVariant
+    val trackColor = Color.White.copy(alpha = 0.25f)
     val percentageText = if (hasTotal) "${(ratio * 100).toInt()}" else "—"
 
     Box(modifier = modifier, contentAlignment = Alignment.Center) {

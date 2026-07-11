@@ -31,4 +31,31 @@ class KeywordExtractor @Inject constructor() {
             .filter { it.length >= MIN_LENGTH }
             .distinct()
     }
+
+    /**
+     * 从文本中提取实体词（人名、地名、专有名词）。
+     * 实体特征：3-5个连续汉字，非常见动词/形容词结尾。
+     * 纯本地字符串处理，不需要 API。
+     */
+    fun extractEntities(text: String): List<String> {
+        if (text.isBlank()) return emptyList()
+
+        val hantOnly = Regex("^[\\u4e00-\\u9fff]{3,5}$")  // 3-5个纯汉字
+        val stopEndings = setOf("是", "的", "了", "吗", "呢", "吧", "啊", "哦",
+            "会", "能", "要", "想", "去", "来", "做", "说", "看", "吃", "喝",
+            "不", "很", "都", "也", "就", "还", "有", "在", "个", "和")
+
+        val candidates = text
+            .split(SPLITTER)
+            .map { it.trim() }
+            .filter { it.matches(hantOnly) }
+            .filter { token ->
+                val lastChar = token.last().toString()
+                lastChar !in stopEndings
+            }
+            .distinct()
+
+        // 单个实体也参与搜索（如人名、地名等专有名词即使只有一个也有价值）
+        return candidates.takeIf { it.isNotEmpty() } ?: emptyList()
+    }
 }

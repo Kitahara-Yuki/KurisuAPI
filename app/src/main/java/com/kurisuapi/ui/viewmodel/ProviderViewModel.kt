@@ -106,10 +106,22 @@ class ProviderViewModel @Inject constructor(
         reasoningEffort: String = "high",
         thinkingBudgetTokens: Int = 0,
         contextWindow: Long = 0,
+        frequencyPenalty: Double = 0.6,
+        presencePenalty: Double = 0.4,
         onDone: () -> Unit
     ) {
         viewModelScope.launch {
             try {
+                // 保存前基础验证：名称、地址、密钥不能为空
+                if (name.isBlank() || baseUrl.isBlank() || apiKey.isBlank()) {
+                    _message.value = "保存失败：名称、API Key 和 Base URL 不能为空"
+                    return@launch
+                }
+                // Base URL 格式验证
+                if (!baseUrl.startsWith("http://") && !baseUrl.startsWith("https://")) {
+                    _message.value = "保存失败：Base URL 必须以 http:// 或 https:// 开头"
+                    return@launch
+                }
                 val now = System.currentTimeMillis()
                 val savedId: Long
                 if (id != null && id > 0) {
@@ -128,7 +140,9 @@ class ProviderViewModel @Inject constructor(
                             thinkingEnabled = thinkingEnabled,
                             reasoningEffort = reasoningEffort,
                             thinkingBudgetTokens = thinkingBudgetTokens,
-                            contextWindow = contextWindow
+                            contextWindow = contextWindow,
+                            frequencyPenalty = frequencyPenalty,
+                            presencePenalty = presencePenalty
                         )
                     )
                 } else {
@@ -143,6 +157,8 @@ class ProviderViewModel @Inject constructor(
                             reasoningEffort = reasoningEffort,
                             thinkingBudgetTokens = thinkingBudgetTokens,
                             contextWindow = contextWindow,
+                            frequencyPenalty = frequencyPenalty,
+                            presencePenalty = presencePenalty,
                             createdAt = now, updatedAt = now
                         )
                     )
@@ -161,9 +177,21 @@ class ProviderViewModel @Inject constructor(
 
     fun deleteProvider(provider: ProviderEntity) {
         viewModelScope.launch {
-            // 修复：先清理该 Provider 的所有 model 子行，避免孤儿数据
-            modelRepository.deleteAllByProvider(provider.id)
-            providerRepository.delete(provider)
+            try {
+                // 先清理该 Provider 的所有 model 子行，避免孤儿数据
+                modelRepository.deleteAllByProvider(provider.id)
+                providerRepository.delete(provider)
+                // 如果删除的是默认 Provider，自动将另一个设为默认
+                if (provider.isDefault) {
+                    val remaining = providerRepository.getEnabledOnce()
+                    if (remaining.isNotEmpty()) {
+                        providerRepository.setDefault(remaining.first().id)
+                        _message.value = "已删除，${remaining.first().name} 已自动设为默认"
+                    }
+                }
+            } catch (e: Exception) {
+                _message.value = "删除失败：${e.message ?: "未知错误"}"
+            }
         }
     }
 

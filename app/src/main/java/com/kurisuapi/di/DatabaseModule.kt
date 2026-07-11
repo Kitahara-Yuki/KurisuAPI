@@ -2,6 +2,7 @@ package com.kurisuapi.di
 
 import android.content.Context
 import androidx.room.Room
+import androidx.room.RoomDatabase
 import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 import com.kurisuapi.data.dao.*
@@ -292,6 +293,180 @@ object DatabaseModule {
         }
     }
 
+    // v23 → v24: memories 表新增 recallCount + lastRecalledAt（记忆衰减）
+    private val MIGRATION_23_24 = object : Migration(23, 24) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            db.execSQL("ALTER TABLE `memories` ADD COLUMN `recallCount` INTEGER NOT NULL DEFAULT 0")
+            db.execSQL("ALTER TABLE `memories` ADD COLUMN `lastRecalledAt` INTEGER NOT NULL DEFAULT 0")
+        }
+    }
+
+    // v24 → v25: providers 表新增 frequencyPenalty + presencePenalty 列
+    private val MIGRATION_24_25 = object : Migration(24, 25) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            db.execSQL("ALTER TABLE `providers` ADD COLUMN `frequencyPenalty` REAL NOT NULL DEFAULT 0.0")
+            db.execSQL("ALTER TABLE `providers` ADD COLUMN `presencePenalty` REAL NOT NULL DEFAULT 0.0")
+        }
+    }
+
+    // v25 → v26: characters 表新增 exampleDialogues 列
+    private val MIGRATION_25_26 = object : Migration(25, 26) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            db.execSQL("ALTER TABLE `characters` ADD COLUMN `exampleDialogues` TEXT NOT NULL DEFAULT ''")
+        }
+    }
+
+    // v26 → v27: 新增 proactive_log 表（主动消息审计日志）
+    private val MIGRATION_26_27 = object : Migration(26, 27) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            db.execSQL("""
+                CREATE TABLE IF NOT EXISTS `proactive_log` (
+                    `id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                    `characterId` INTEGER NOT NULL,
+                    `timestamp` INTEGER NOT NULL,
+                    `decision` TEXT NOT NULL,
+                    `triggerScore` REAL NOT NULL,
+                    `reason` TEXT NOT NULL,
+                    `silenceMinutes` INTEGER NOT NULL,
+                    `emotionSnapshot` TEXT NOT NULL,
+                    `timeOfDay` TEXT NOT NULL,
+                    `signalBreakdown` TEXT NOT NULL
+                )
+            """.trimIndent())
+            db.execSQL("CREATE INDEX IF NOT EXISTS `index_proactive_log_characterId_timestamp` ON `proactive_log` (`characterId`, `timestamp`)")
+        }
+    }
+
+    private val MIGRATION_27_28 = object : Migration(27, 28) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            // 为记忆表补充查询索引，加速关键词搜索和会话过滤
+            db.execSQL("CREATE INDEX IF NOT EXISTS `index_memories_sessionId` ON `memories` (`sessionId`)")
+            db.execSQL("CREATE INDEX IF NOT EXISTS `index_memories_isDeleted` ON `memories` (`isDeleted`)")
+            db.execSQL("CREATE INDEX IF NOT EXISTS `index_memories_characterId_updatedAt` ON `memories` (`characterId`, `updatedAt`)")
+            db.execSQL("CREATE INDEX IF NOT EXISTS `index_memories_characterId_isDeleted_importance` ON `memories` (`characterId`, `isDeleted`, `importance`)")
+        }
+    }
+
+    private val MIGRATION_28_29 = object : Migration(28, 29) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            db.execSQL("""
+                CREATE TABLE IF NOT EXISTS `cache_daily_stats` (
+                    `date` TEXT NOT NULL,
+                    `embedHits` INTEGER NOT NULL DEFAULT 0,
+                    `embedMisses` INTEGER NOT NULL DEFAULT 0,
+                    `chatL1L2Hits` INTEGER NOT NULL DEFAULT 0,
+                    `chatL3Hits` INTEGER NOT NULL DEFAULT 0,
+                    `chatMisses` INTEGER NOT NULL DEFAULT 0,
+                    `updatedAt` INTEGER NOT NULL DEFAULT 0,
+                    PRIMARY KEY(`date`)
+                )
+            """.trimIndent())
+        }
+    }
+
+    private val MIGRATION_29_30 = object : Migration(29, 30) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            db.execSQL("""
+                CREATE TABLE IF NOT EXISTS `diary_entries` (
+                    `id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                    `characterId` INTEGER NOT NULL,
+                    `date` TEXT NOT NULL,
+                    `content` TEXT NOT NULL,
+                    `createdAt` INTEGER NOT NULL DEFAULT 0
+                )
+            """.trimIndent())
+            db.execSQL("CREATE INDEX IF NOT EXISTS `index_diary_entries_characterId` ON `diary_entries` (`characterId`)")
+            db.execSQL("CREATE INDEX IF NOT EXISTS `index_diary_entries_date` ON `diary_entries` (`date`)")
+        }
+    }
+
+    // v34 → v35: relationships 表补 rawComposite 列（30→31 迁移遗漏）
+    private val MIGRATION_34_35 = object : Migration(34, 35) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            db.execSQL("ALTER TABLE `relationships` ADD COLUMN `rawComposite` INTEGER NOT NULL DEFAULT 0")
+            // 从现有三轴数据回填
+            db.execSQL("UPDATE `relationships` SET `rawComposite` = `intimacy` + `trust` + `attraction`")
+        }
+    }
+
+    // v35 → v36: Entity 字段回退整理（ForeignKey/字段补齐），无 schema 变更
+    private val MIGRATION_35_36 = object : Migration(35, 36) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            // No schema change
+        }
+    }
+
+    // v31 → v32: 日记表新增 isManual 字段
+    private val MIGRATION_31_32 = object : Migration(31, 32) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            db.execSQL("ALTER TABLE `diary_entries` ADD COLUMN `isManual` INTEGER NOT NULL DEFAULT 0")
+        }
+    }
+
+    // v33 → v34: themes 表新增背景图片字段
+    private val MIGRATION_33_34 = object : Migration(33, 34) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            db.execSQL("ALTER TABLE `themes` ADD COLUMN `chatBgImagePath` TEXT NOT NULL DEFAULT ''")
+            db.execSQL("ALTER TABLE `themes` ADD COLUMN `chatBgBlurRadius` INTEGER NOT NULL DEFAULT 0")
+            db.execSQL("ALTER TABLE `themes` ADD COLUMN `chatBgDimPercent` INTEGER NOT NULL DEFAULT 0")
+        }
+    }
+
+    // v32 → v33: 新增 themes 表
+    private val MIGRATION_32_33 = object : Migration(32, 33) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            db.execSQL("""
+                CREATE TABLE IF NOT EXISTS `themes` (
+                    `id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                    `name` TEXT NOT NULL,
+                    `seedColorHex` TEXT NOT NULL DEFAULT '',
+                    `bannerColorHex` TEXT NOT NULL DEFAULT '',
+                    `bannerTextColorHex` TEXT NOT NULL DEFAULT '',
+                    `fontColorHex` TEXT NOT NULL DEFAULT '',
+                    `cardColorHex` TEXT NOT NULL DEFAULT '',
+                    `chatBgColorHex` TEXT NOT NULL DEFAULT '',
+                    `bubbleUserColorHex` TEXT NOT NULL DEFAULT '',
+                    `bubbleAiColorHex` TEXT NOT NULL DEFAULT '',
+                    `isActive` INTEGER NOT NULL DEFAULT 0,
+                    `isBuiltIn` INTEGER NOT NULL DEFAULT 0,
+                    `createdAt` INTEGER NOT NULL DEFAULT 0
+                )
+            """.trimIndent())
+            db.execSQL("CREATE INDEX IF NOT EXISTS `index_themes_isActive` ON `themes` (`isActive`)")
+        }
+    }
+
+    // v30 → v31: 关系系统升级为三轴模型 + Knapp 五阶段
+    private val MIGRATION_30_31 = object : Migration(30, 31) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            // 新增三轴字段
+            db.execSQL("ALTER TABLE `relationships` ADD COLUMN `intimacy` INTEGER NOT NULL DEFAULT 0")
+            db.execSQL("ALTER TABLE `relationships` ADD COLUMN `trust` INTEGER NOT NULL DEFAULT 0")
+            db.execSQL("ALTER TABLE `relationships` ADD COLUMN `attraction` INTEGER NOT NULL DEFAULT 0")
+            // 新增阶段名（用旧的 level 值填充）
+            db.execSQL("ALTER TABLE `relationships` ADD COLUMN `stage` TEXT NOT NULL DEFAULT '初识'")
+            // 新增上次互动时间
+            db.execSQL("ALTER TABLE `relationships` ADD COLUMN `lastInteractionTime` INTEGER NOT NULL DEFAULT 0")
+            // 新增每日增益追踪
+            db.execSQL("ALTER TABLE `relationships` ADD COLUMN `dailyGains` TEXT NOT NULL DEFAULT ''")
+            // 迁移旧数据：将旧 score 按比例分配到三轴，level 复制到 stage
+            db.execSQL("""
+                UPDATE `relationships` SET
+                    `intimacy` = CAST(`score` * 0.4 AS INTEGER),
+                    `trust` = CAST(`score` * 0.3 AS INTEGER),
+                    `attraction` = CAST(`score` * 0.3 AS INTEGER),
+                    `stage` = CASE
+                        WHEN `level` IN ('初识','探索','深入','融合','羁绊') THEN `level`
+                        WHEN `score` >= 80 THEN '融合'
+                        WHEN `score` >= 50 THEN '深入'
+                        WHEN `score` >= 20 THEN '探索'
+                        ELSE '初识'
+                    END,
+                    `lastInteractionTime` = `updatedAt`
+            """.trimIndent())
+        }
+    }
+
     @Provides
     @Singleton
     fun provideDatabase(@ApplicationContext context: Context): KurisuDatabase {
@@ -300,8 +475,9 @@ object DatabaseModule {
             KurisuDatabase::class.java,
             "kurisu_database"
         )
-            .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12, MIGRATION_12_13, MIGRATION_13_14, MIGRATION_14_15, MIGRATION_15_16, MIGRATION_16_17, MIGRATION_17_18, MIGRATION_18_19, MIGRATION_19_20, MIGRATION_20_21, MIGRATION_21_22, MIGRATION_22_23)
-            .fallbackToDestructiveMigrationOnDowngrade()
+            .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12, MIGRATION_12_13, MIGRATION_13_14, MIGRATION_14_15, MIGRATION_15_16, MIGRATION_16_17, MIGRATION_17_18, MIGRATION_18_19, MIGRATION_19_20, MIGRATION_20_21, MIGRATION_21_22, MIGRATION_22_23, MIGRATION_23_24, MIGRATION_24_25, MIGRATION_25_26, MIGRATION_26_27, MIGRATION_27_28, MIGRATION_28_29, MIGRATION_29_30, MIGRATION_30_31, MIGRATION_31_32, MIGRATION_32_33, MIGRATION_33_34, MIGRATION_34_35, MIGRATION_35_36)
+            .setJournalMode(RoomDatabase.JournalMode.WRITE_AHEAD_LOGGING)
+            .fallbackToDestructiveMigration()  // 遇到未覆盖的迁移路径时重建数据库，避免启动崩溃
             .build()
     }
 
@@ -317,4 +493,8 @@ object DatabaseModule {
     @Provides @Singleton fun provideConversationSessionDao(db: KurisuDatabase): ConversationSessionDao = db.conversationSessionDao()
     @Provides @Singleton fun provideConversationFolderDao(db: KurisuDatabase): ConversationFolderDao = db.conversationFolderDao()
     @Provides @Singleton fun provideConversationIndexDao(db: KurisuDatabase): ConversationIndexDao = db.conversationIndexDao()
+    @Provides @Singleton fun provideProactiveLogDao(db: KurisuDatabase): ProactiveLogDao = db.proactiveLogDao()
+    @Provides @Singleton fun provideCacheStatsDao(db: KurisuDatabase): CacheStatsDao = db.cacheStatsDao()
+    @Provides @Singleton fun provideDiaryEntryDao(db: KurisuDatabase): DiaryEntryDao = db.diaryEntryDao()
+    @Provides @Singleton fun provideThemeDao(db: KurisuDatabase): ThemeDao = db.themeDao()
 }

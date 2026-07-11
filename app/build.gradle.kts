@@ -23,8 +23,8 @@ android {
         applicationId = "com.kurisuapi"
         minSdk = 26
         targetSdk = 35
-        versionCode = 7
-        versionName = "1.5.5"
+        versionCode = 9
+        versionName = "0.0.1"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
@@ -106,6 +106,10 @@ dependencies {
     ksp(libs.hilt.compiler)
     implementation(libs.hilt.navigation.compose)
 
+    // WorkManager
+    implementation(libs.work.runtime)
+    implementation(libs.work.hilt)
+
     // Network
     implementation(libs.retrofit)
     implementation(libs.retrofit.gson)
@@ -136,6 +140,13 @@ dependencies {
     // Backdrop (liquid glass)
     implementation(libs.backdrop)
 
+    // MaterialKolor (seed color → Material3 scheme)
+    implementation(libs.material.kolor)
+
     // SQLite-Vector (语义搜索)
     implementation("ai.sqlite:vector:0.9.34")
+
+    // UCrop 图片裁剪（需要 AppCompat）
+    implementation("androidx.appcompat:appcompat:1.7.0")
+    implementation("com.github.yalantis:ucrop:2.2.11")
 }

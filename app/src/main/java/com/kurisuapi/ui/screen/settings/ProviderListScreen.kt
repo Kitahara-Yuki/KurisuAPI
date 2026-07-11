@@ -46,9 +46,7 @@ fun ProviderListScreen(
                         Icon(Icons.Outlined.Add, contentDescription = "添加")
                     }
                 },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.92f)
-                )
+                colors = com.kurisuapi.ui.theme.topBarColors()
             )
         }
     ) { paddingValues ->
@@ -87,6 +85,35 @@ fun ProviderListScreen(
                 }
             }
 
+            if (providers.isEmpty()) {
+                item {
+                    Box(
+                        modifier = Modifier.fillMaxWidth().padding(sdp(32.dp)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Icon(
+                                Icons.Outlined.CloudOff,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.3f),
+                                modifier = Modifier.size(sdp(48.dp))
+                            )
+                            Spacer(modifier = Modifier.height(sdp(12.dp)))
+                            Text(
+                                "暂无模型管理项",
+                                style = MaterialTheme.typography.bodyLarge,
+                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
+                            )
+                            Spacer(modifier = Modifier.height(sdp(4.dp)))
+                            Text(
+                                "点击右上角 + 添加",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.3f)
+                            )
+                        }
+                    }
+                }
+            }
             items(providers, key = { it.id }) { provider ->
                 ProviderCard(
                     provider = provider,
@@ -187,6 +214,9 @@ private fun ProviderCard(
     if (showDeleteDialog) {
         AlertDialog(
             onDismissRequest = { showDeleteDialog = false },
+            containerColor = MaterialTheme.colorScheme.surface,
+            titleContentColor = MaterialTheme.colorScheme.onSurface,
+            textContentColor = MaterialTheme.colorScheme.onSurfaceVariant,
             title = { Text("删除模型管理") },
             text = { Text("确定删除 \"${provider.name}\"？相关模型数据也会被删除。") },
             confirmButton = {

@@ -64,7 +64,9 @@ class OpenAiCompatibleProvider(
         apiKey: String,
         baseUrl: String,
         thinkingEnabled: Boolean = true,
-        reasoningEffort: String = "high"
+        reasoningEffort: String = "high",
+        frequencyPenalty: Double = 0.0,
+        presencePenalty: Double = 0.0
     ): ProviderResult = withContext(Dispatchers.IO) {
         try {
             val url = "${baseUrl.trimEnd('/')}/chat/completions"
@@ -91,11 +93,15 @@ class OpenAiCompatibleProvider(
                 requestMap["temperature"] = temperature
             }
 
+            // 频率惩罚和存在惩罚（OpenAI 兼容参数，DeepSeek 也支持）
+            requestMap["frequency_penalty"] = frequencyPenalty
+            requestMap["presence_penalty"] = presencePenalty
+
             val body = gson.toJson(requestMap).toRequestBody("application/json".toMediaType())
 
-            // 调试日志：确认 thinking 参数是否正确传递
+            // 调试日志
             if (BuildConfig.DEBUG) {
-                Log.d("OpenAiProvider", "thinkingEnabled=$thinkingEnabled, reasoningEffort=$reasoningEffort")
+                Log.d("OpenAiProvider", "thinkingEnabled=$thinkingEnabled, reasoningEffort=$reasoningEffort, freqPenalty=$frequencyPenalty, presPenalty=$presencePenalty")
                 Log.d("OpenAiProvider", "Request body keys: ${requestMap.keys}")
             }
 
@@ -111,7 +117,12 @@ class OpenAiCompatibleProvider(
                 val code = r.code
                 val body = r.body?.string() ?: ""
                 if (code !in 200..299) {
-                    val errMsg = when (code) {
+                    // Bug 7 fix: 尝试从 API 返回的 JSON 中提取详细错误信息
+                    val apiError = try {
+                        gson.fromJson(body, com.google.gson.JsonObject::class.java)
+                            ?.getAsJsonObject("error")?.get("message")?.asString
+                    } catch (_: Exception) { null }
+                    val errMsg = apiError ?: when (code) {
                         401 -> "API Key 无效，请检查是否输入正确"
                         403 -> "API Key 没有访问权限，可能余额不足或未开通此服务"
                         404 -> "API 地址不正确，请检查 Base URL 设置"
@@ -125,22 +136,11 @@ class OpenAiCompatibleProvider(
             }
 
             val chatResponse = gson.fromJson(responseBody, ChatResponse::class.java)
-
-            // 提取 reasoning_content（DeepSeek/OpenAI 兼容 API 的思考过程）
-            // 使用 JsonObject 直接解析，因为 ChatResponse 不包含此字段且它是死代码
-            val reasoningContent = try {
-                val jsonObj = gson.fromJson(responseBody, com.google.gson.JsonObject::class.java)
-                jsonObj
-                    .getAsJsonArray("choices")?.get(0)?.asJsonObject
-                    ?.getAsJsonObject("message")
-                    ?.get("reasoning_content")?.asString ?: ""
-            } catch (_: Exception) { "" }
-
-            val content = chatResponse.choices?.firstOrNull()?.message?.content ?: ""
+            val message = chatResponse.choices?.firstOrNull()?.message
 
             ProviderResult(
-                content = content,
-                reasoningContent = reasoningContent,
+                content = message?.content ?: "",
+                reasoningContent = message?.reasoningContent ?: "",
                 promptTokens = chatResponse.usage?.promptTokens ?: 0,
                 completionTokens = chatResponse.usage?.completionTokens ?: 0
             )
@@ -163,7 +163,9 @@ class OpenAiCompatibleProvider(
         baseUrl: String,
         thinkingEnabled: Boolean = true,
         reasoningEffort: String = "high",
-        streamTimeoutMs: Long = 30_000
+        streamTimeoutMs: Long = 30_000,
+        frequencyPenalty: Double = 0.0,
+        presencePenalty: Double = 0.0
     ): Flow<StreamToken> = flow {
         try {
             val url = "${baseUrl.trimEnd('/')}/chat/completions"
@@ -190,6 +192,9 @@ class OpenAiCompatibleProvider(
                 }
             }
 
+            requestMap["frequency_penalty"] = frequencyPenalty
+            requestMap["presence_penalty"] = presencePenalty
+
             val body = gson.toJson(requestMap).toRequestBody("application/json".toMediaType())
             val httpRequest = Request.Builder()
                 .url(url)
@@ -204,7 +209,11 @@ class OpenAiCompatibleProvider(
             val response = streamClient.newCall(httpRequest).execute()
             response.use { resp ->
                 if (resp.code !in 200..299) {
-                    throw RuntimeException("流式请求失败 (${resp.code})")
+                    // Bug 3 fix: 读取 API 返回的详细错误信息，而非仅状态码
+                    val errorBody = try {
+                        resp.peekBody(1024).string()
+                    } catch (_: Exception) { "" }
+                    throw RuntimeException("流式请求失败 (${resp.code})${if (errorBody.isNotBlank()) ": $errorBody" else ""}")
                 }
                 val source = resp.body?.source() ?: return@use
                 source.timeout().timeout(streamTimeoutMs, java.util.concurrent.TimeUnit.MILLISECONDS)
@@ -637,12 +646,14 @@ class OpenAiCompatibleProvider(
                 .addHeader("Content-Type", "application/json")
                 .post(gson.toJson(requestMap).toRequestBody("application/json".toMediaType()))
                 .build()
-            val response = okHttpClient.newCall(request).execute()
-            if (!response.isSuccessful) {
-                Log.w(TAG, "Embedding API returned ${response.code}")
-                return@withContext null
+            // Bug 4 fix: 用 use{} 包裹响应，确保连接自动关闭，避免连接池泄漏
+            val body = okHttpClient.newCall(request).execute().use { response ->
+                if (!response.isSuccessful) {
+                    Log.w(TAG, "Embedding API returned ${response.code}")
+                    return@withContext null
+                }
+                response.body?.string() ?: return@withContext null
             }
-            val body = response.body?.string() ?: return@withContext null
             val json = gson.fromJson(body, com.google.gson.JsonObject::class.java)
             val embeddingArray = json.getAsJsonArray("data")
                 ?.get(0)?.asJsonObject

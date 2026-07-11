@@ -20,8 +20,12 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontStyle
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.kurisuapi.data.entity.ChatHistoryEntity
+import com.kurisuapi.ui.theme.LocalActiveTheme
+import com.kurisuapi.ui.theme.LocalIsDarkTheme
+import com.kurisuapi.util.parseColor
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
@@ -32,14 +36,22 @@ fun ChatBubble(
     message: ChatHistoryEntity,
     modifier: Modifier = Modifier
 ) {
+    val isDark = LocalIsDarkTheme.current
     val isUser = message.sender == "user"
+    val theme = LocalActiveTheme.current
+
+    val userBubbleColor = theme?.bubbleUserColorHex?.parseColor()
+    val aiBubbleColor = theme?.bubbleAiColorHex?.parseColor()
+
     val bubbleColor = if (isUser) {
-        MaterialTheme.colorScheme.primary.copy(alpha = 0.9f)
+        userBubbleColor ?: MaterialTheme.colorScheme.primary.copy(alpha = 0.9f)
     } else {
-        MaterialTheme.colorScheme.surface.copy(alpha = 0.85f)
+        aiBubbleColor
+            ?: if (isDark) MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.85f)
+            else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.85f)
     }
     val borderColor = if (isUser) {
-        MaterialTheme.colorScheme.primary.copy(alpha = 0.3f)
+        (userBubbleColor ?: MaterialTheme.colorScheme.primary).copy(alpha = 0.3f)
     } else {
         MaterialTheme.colorScheme.outline
     }
@@ -56,9 +68,11 @@ fun ChatBubble(
 
     val timeFormat = remember { DateTimeFormatter.ofPattern("HH:mm") }
     val timeText = remember(message.timestamp) {
-        Instant.ofEpochMilli(message.timestamp)
-            .atZone(ZoneId.systemDefault())
-            .format(timeFormat)
+        try {
+            Instant.ofEpochMilli(message.timestamp)
+                .atZone(ZoneId.systemDefault())
+                .format(timeFormat)
+        } catch (e: Exception) { "" }
     }
 
     var thinkingExpanded by rememberSaveable { mutableStateOf(false) }
@@ -125,6 +139,8 @@ fun ChatBubble(
                         text = message.reasoningContent,
                         style = MaterialTheme.typography.bodySmall,
                         fontStyle = FontStyle.Italic,
+                        maxLines = 12,
+                        overflow = TextOverflow.Ellipsis,
                         color = MaterialTheme.colorScheme.onTertiaryContainer.copy(alpha = 0.8f)
                     )
                 }
@@ -145,7 +161,7 @@ fun ChatBubble(
                 style = MaterialTheme.typography.bodyMedium
             )
         }
-        Spacer(modifier = Modifier.height(2.dp))
+        Spacer(modifier = Modifier.height(sdp(2.dp)))
         Text(
             text = timeText,
             style = MaterialTheme.typography.labelSmall,

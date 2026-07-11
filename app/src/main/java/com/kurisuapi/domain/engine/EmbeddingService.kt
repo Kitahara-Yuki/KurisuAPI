@@ -59,7 +59,8 @@ class EmbeddingService @Inject constructor(
         var dot = 0f
         var normA = 0f
         var normB = 0f
-        for (i in a.indices) {
+        val len = minOf(a.size, b.size)
+        for (i in 0 until len) {
             dot += a[i] * b[i]
             normA += a[i] * a[i]
             normB += b[i] * b[i]
