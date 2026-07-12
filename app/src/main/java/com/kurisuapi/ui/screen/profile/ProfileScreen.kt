@@ -135,7 +135,7 @@ fun ProfileScreen(
                                     contentAlignment = Alignment.Center
                                 ) {
                                     Text(
-                                        text = (userName.ifBlank { "Y" }).first().toString(),
+                                        text = userName.firstOrNull()?.toString() ?: "?",
                                         fontSize = 34.sp,
                                         fontWeight = FontWeight.SemiBold,
                                         color = MaterialTheme.colorScheme.primary,
@@ -155,7 +155,7 @@ fun ProfileScreen(
                             contentAlignment = Alignment.Center
                         ) {
                             Text(
-                                text = userName.ifBlank { "Yuki" },
+                                text = userName.ifBlank { "点击填写信息" },
                                 style = MaterialTheme.typography.headlineSmall,
                                 fontWeight = FontWeight.SemiBold,
                                 color = MaterialTheme.colorScheme.onSurface

@@ -108,7 +108,7 @@ fun SystemSettingsScreen(onNavigateBack: () -> Unit) {
             Spacer(modifier = Modifier.weight(1f))
 
             Text(
-                text = "作者：北原友希_Yuki",
+                text = "作者：北原友希_Yuki(Kitahara-Yuki)",
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
                 textAlign = TextAlign.Center

@@ -3,6 +3,8 @@ package com.kurisuapi.domain.service
 import android.util.Log
 import com.kurisuapi.data.api.ChatMessage
 import kotlinx.coroutines.CancellationException
+
+// 【原创作者签名】github.com/Kitahara-Yuki/KurisuAPI — 北原友希 (Yuki Kitahara) — GPL 3.0
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers

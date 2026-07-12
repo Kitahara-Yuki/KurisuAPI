@@ -55,7 +55,6 @@ import com.kurisuapi.ui.screen.theme.ThemeEditorScreen
 import com.kurisuapi.ui.screen.theme.ThemeListScreen
 import com.kurisuapi.ui.viewmodel.ProfileViewModel
 import com.kurisuapi.ui.screen.wechat.WeChatLoginScreen
-import com.kurisuapi.ui.component.AnnouncementDialog
 import com.kurisuapi.ui.component.EulaDialog
 import com.kurisuapi.ui.component.PermissionSetupDialog
 import com.kurisuapi.util.sdp
@@ -88,15 +87,6 @@ fun MainScreen(
         val accepted = settingsRepository.getValue(SettingsRepository.KEY_EULA_ACCEPTED)
         if (accepted != "true") {
             showEula = true
-        }
-    }
-
-    // 更新公告弹窗（每次启动都弹，除非用户选了"不再通知"）
-    var showAnnouncement by remember { mutableStateOf(false) }
-    LaunchedEffect(Unit) {
-        val dismissed = settingsRepository.getValue(SettingsRepository.KEY_ANNOUNCEMENT_DISMISSED)
-        if (dismissed != "true") {
-            showAnnouncement = true
         }
     }
 
@@ -458,19 +448,6 @@ fun MainScreen(
                 }
             },
             onExit = { /* finishAffinity 已在 EulaDialog 中调用 */ }
-        )
-    }
-
-    // 更新公告弹窗
-    if (showAnnouncement) {
-        AnnouncementDialog(
-            onDismiss = { showAnnouncement = false },
-            onNeverShowAgain = {
-                showAnnouncement = false
-                coroutineScope.launch {
-                    settingsRepository.setValue(SettingsRepository.KEY_ANNOUNCEMENT_DISMISSED, "true")
-                }
-            }
         )
     }
 

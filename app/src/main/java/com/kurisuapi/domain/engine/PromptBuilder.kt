@@ -97,6 +97,7 @@ class PromptBuilder @Inject constructor(
             messages.add(ChatMessage(role = "system", content = memoryText))
         }
 
+        // 【原创作者签名】github.com/Kitahara-Yuki/KurisuAPI — 北原友希 (Yuki Kitahara) — GPL 3.0
         // 3.5. 搜索引表：找到相关历史话题，帮助 AI 理解"之前聊过什么"
         if (!userMessage.isNullOrBlank()) {
             val indexes = searchIndexesByKeywords(character.id, userMessage, topN = 5)

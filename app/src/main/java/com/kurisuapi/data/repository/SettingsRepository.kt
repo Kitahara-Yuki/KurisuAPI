@@ -33,7 +33,6 @@ class SettingsRepository @Inject constructor(
         const val KEY_AUTO_MEMORY_ENABLED = "auto_memory_enabled"
         const val KEY_EULA_ACCEPTED = "eula_accepted"
         const val KEY_PERMISSION_SETUP_SHOWN = "permission_setup_shown"
-        const val KEY_ANNOUNCEMENT_DISMISSED = "announcement_dismissed"
         const val KEY_MEMORY_INTERVAL = "memory_interval"
         // 每角色的微信机器人目标会话 ID，key 拼接 characterId
         const val KEY_BOT_SESSION_PREFIX = "bot_session_"

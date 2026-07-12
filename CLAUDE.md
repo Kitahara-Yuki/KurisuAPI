@@ -34,14 +34,14 @@
 
 ### 3. 复制到桌面
 ```bash
-cp app/build/outputs/apk/release/app-release.apk "/Users/yuki/Desktop/KurisuAPI-测试版v{versionName}.apk"
+cp app/build/outputs/apk/release/app-release.apk "/Users/yuki/Desktop/KurisuAPI-正式版v{versionName}.apk"
 ```
 
 ### 规则汇总
 | 项目 | 标准 |
 |------|------|
 | 构建命令 | `assembleRelease`（禁止 `assembleDebug`） |
-| 文件命名 | `KurisuAPI-测试版v{versionName}.apk` |
+| 文件命名 | `KurisuAPI-正式版v{versionName}.apk` |
 | 输出位置 | `/Users/yuki/Desktop/` |
 | 同名文件 | 直接覆盖，无需确认 |
 | 触发条件 | 仅用户明确说"打包"时触发，不自动构建 |

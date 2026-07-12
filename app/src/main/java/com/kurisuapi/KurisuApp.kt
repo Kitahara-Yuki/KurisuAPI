@@ -9,6 +9,7 @@ import com.kurisuapi.util.LogManager
 import dagger.hilt.android.HiltAndroidApp
 import javax.inject.Inject
 
+// 【原创作者签名】github.com/Kitahara-Yuki/KurisuAPI — 北原友希 (Yuki Kitahara) — GPL 3.0
 @HiltAndroidApp
 class KurisuApp : Application(), Configuration.Provider {
 

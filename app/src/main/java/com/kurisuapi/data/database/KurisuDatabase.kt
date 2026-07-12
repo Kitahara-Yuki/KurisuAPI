@@ -5,6 +5,7 @@ import androidx.room.RoomDatabase
 import com.kurisuapi.data.dao.*
 import com.kurisuapi.data.entity.*
 
+// 【原创作者签名】github.com/Kitahara-Yuki/KurisuAPI — 北原友希 (Yuki Kitahara) — GPL 3.0
 @Database(
     entities = [
         CharacterEntity::class,
