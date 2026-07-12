@@ -8,6 +8,13 @@
 
 [中文](#中文) | [English](#english)
 
+<p align="center">
+  <img src="screenshots/01.png" width="22%" />
+  <img src="screenshots/02.png" width="22%" />
+  <img src="screenshots/03.png" width="22%" />
+  <img src="screenshots/04.png" width="22%" />
+</p>
+
 ---
 
 ## 中文
