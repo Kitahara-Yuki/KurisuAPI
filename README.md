@@ -13,7 +13,7 @@
 <p align="center"><a href="#截图--screenshots">📸 截图</a> &bull; <a href="#中文">✨ 功能</a> &bull; <a href="#技术栈--tech-stack">🛠 技术栈</a> &bull; <a href="#项目结构--project-structure">📁 项目结构</a> &bull; <a href="#构建--build">🔧 构建</a> &bull; <a href="#许可证--license">📄 许可证</a></p>
 <hr>
 
-## 截图 / Screenshots
+## 项目截图 / Screenshots
 
 <p align="center">
   <a href="screenshots/01.png"><img src="screenshots/01.png" width="22%" /></a>
