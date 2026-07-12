@@ -5,14 +5,21 @@
 [![API](https://img.shields.io/badge/API-26%2B-green.svg)](https://developer.android.com)
 [![AGP](https://img.shields.io/badge/AGP-8.7.3-orange.svg)](https://developer.android.com/build)
 [![Compose](https://img.shields.io/badge/Compose-Material%203-4285F4.svg)](https://developer.android.com/compose)
+[![Release](https://img.shields.io/github/v/release/Kitahara-Yuki/KurisuAPI)](https://github.com/Kitahara-Yuki/KurisuAPI/releases)
 
 [中文](#中文) | [English](#english)
 
+<hr>
+<p align="center"><a href="#截图--screenshots">📸 截图</a> &bull; <a href="#中文">✨ 功能</a> &bull; <a href="#技术栈--tech-stack">🛠 技术栈</a> &bull; <a href="#项目结构--project-structure">📁 项目结构</a> &bull; <a href="#构建--build">🔧 构建</a> &bull; <a href="#许可证--license">📄 许可证</a></p>
+<hr>
+
+## 截图 / Screenshots
+
 <p align="center">
-  <img src="screenshots/01.png" width="22%" />
-  <img src="screenshots/02.png" width="22%" />
-  <img src="screenshots/03.png" width="22%" />
-  <img src="screenshots/04.png" width="22%" />
+  <a href="screenshots/01.png"><img src="screenshots/01.png" width="22%" /></a>
+  <a href="screenshots/02.png"><img src="screenshots/02.png" width="22%" /></a>
+  <a href="screenshots/03.png"><img src="screenshots/03.png" width="22%" /></a>
+  <a href="screenshots/04.png"><img src="screenshots/04.png" width="22%" /></a>
 </p>
 
 ---
