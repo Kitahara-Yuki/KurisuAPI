@@ -124,14 +124,14 @@ fun SystemSettingsScreen(onNavigateBack: () -> Unit) {
                 OutlinedButton(
                     onClick = {
                         try {
-                            val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://github.com/Kitahara-Yuki"))
+                            val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://github.com/Kitahara-Yuki/KurisuAPI"))
                             intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                             context.startActivity(intent)
                         } catch (_: Exception) {}
                     },
                     shape = RoundedCornerShape(sdp(12.dp)),
                 ) {
-                    Text("GitHub 主页")
+                    Text("GitHub 项目")
                 }
                 Spacer(modifier = Modifier.width(sdp(12.dp)))
                 OutlinedButton(
