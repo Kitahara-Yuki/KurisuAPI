@@ -1,5 +1,11 @@
 # KurisuAPI / 红莉栖API
 
+[![License: GPL v3](https://img.shields.io/badge/License-GPL%20v3-blue.svg)](LICENSE)
+[![Kotlin](https://img.shields.io/badge/Kotlin-2.2.21-purple.svg)](https://kotlinlang.org)
+[![API](https://img.shields.io/badge/API-26%2B-green.svg)](https://developer.android.com)
+[![AGP](https://img.shields.io/badge/AGP-8.7.3-orange.svg)](https://developer.android.com/build)
+[![Compose](https://img.shields.io/badge/Compose-Material%203-4285F4.svg)](https://developer.android.com/compose)
+
 [中文](#中文) | [English](#english)
 
 ---
