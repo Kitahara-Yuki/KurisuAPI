@@ -27,6 +27,28 @@ class ChatOutputFilter @Inject constructor() {
         private val BLANK_LINE = Regex("\\n\\s*\\n")
 
         // ═══════════════════════════════════════════
+        // 元对话过滤（剧情模式 formatStory）
+        // ═══════════════════════════════════════════
+
+        // AI 在"回应"用户而非"叙事"：好的 + 写作行为动词
+        private val META_ACTION_REGEX = Regex(
+            "^(好的|嗯|好)[，,。]?" +
+            "(我来(继续|写|描写|叙述|补充)" +
+            "|我继续(写|描写)" +
+            "|接下来(我会|请|我们将)" +
+            "|下面(我来|我们|请)).*"
+        )
+        // 说明性标注：（以下为...）（接上文...）
+        private val META_NOTE_REGEX = Regex("^[（(]?(以下|接上文|场景过渡|时间跳跃|视角切换).*")
+        // "收到/了解/明白" 后面紧跟的是叙事承诺而非角色对话（不含"你的"防止误杀）
+        private val META_CONFIRM_REGEX = Regex(
+            "^(收到|了解|明白)[：:，,。]?" +
+            "(我会(继续|按|为|写|描写|叙述)" +
+            "|我将(继续|为|描写)" +
+            "|接下来(我会|请)).*"
+        )
+
+        // ═══════════════════════════════════════════
         // 阶段护栏：违规定义
         // ═══════════════════════════════════════════
 
@@ -173,6 +195,8 @@ class ChatOutputFilter @Inject constructor() {
      * - 其他非空行 → 对话
      *
      * 规则：当前行类型与上一行不同时，插入一个空行。连续同类型不插空行。
+     *
+     * 预处理：自动补齐 AI 偶尔漏写的半括号。
      */
     fun formatStory(text: String): String {
         val lines = text.split("\n")
@@ -182,8 +206,14 @@ class ChatOutputFilter @Inject constructor() {
         var lastType: String? = null
 
         for (line in lines) {
-            val trimmed = line.trim()
+            var trimmed = line.trim()
             if (trimmed.isEmpty()) continue  // 跳过原始空行，统一由算法管理
+
+            // 预处理：补齐 AI 偶尔漏写的半括号
+            trimmed = fixUnmatchedBrackets(trimmed)
+
+            // 预处理：跳过 AI 的元对话行（跳出角色评价自己的写作）
+            if (isMetaDialogueLine(trimmed)) continue
 
             val type = when {
                 trimmed.startsWith("（") && trimmed.endsWith("）") -> "desc"
@@ -199,6 +229,46 @@ class ChatOutputFilter @Inject constructor() {
         }
 
         return result.joinToString("\n").trim()
+    }
+
+    /**
+     * 自动补齐 AI 漏写的半括号。
+     * - 以 ）结尾但开头不是 （ → 补左括号
+     * - 以 （开头但结尾不是 ） → 补右括号
+     * - 同理处理 「」
+     *
+     * ponytail: 只检查行首/行尾括号，行中间的 stray bracket 不理。误补概率极低，真出现再说。
+     */
+    private fun fixUnmatchedBrackets(line: String): String {
+        var result = line
+        // 描述括号 （）
+        if (result.endsWith("）") && !result.startsWith("（")) {
+            result = "（$result"
+        }
+        if (result.startsWith("（") && !result.endsWith("）")) {
+            result = "$result）"
+        }
+        // 内心独白 「」
+        if (result.endsWith("」") && !result.startsWith("「")) {
+            result = "「$result"
+        }
+        if (result.startsWith("「") && !result.endsWith("」")) {
+            result = "$result」"
+        }
+        return result
+    }
+
+    /**
+     * 检测一行是否为 AI 的"元对话"——即 AI 跳出角色，评价自己正在写的内容。
+     * 例如："好的，我来继续写" / "接下来我会描写" / "（以下为场景过渡）"
+     * 这些行不应出现在最终输出中。
+     */
+    private fun isMetaDialogueLine(line: String): Boolean {
+        if (line.matches(META_ACTION_REGEX)) return true
+        if (line.matches(META_NOTE_REGEX)) return true
+        if (line.startsWith("回复") || line.startsWith("回答")) return true
+        if (line.matches(META_CONFIRM_REGEX)) return true
+        return false
     }
 }
 

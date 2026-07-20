@@ -78,10 +78,14 @@ class PromptBuilder @Inject constructor(
         }
 
         // 2.5. 对话摘要（当前会话的历史上下文浓缩，如有）
+        // 剧情模式用更有故事感的标签，帮助 AI 理解"故事写到哪了"
         if (session?.summary != null && session.summary.isNotBlank()) {
             messages.add(ChatMessage(
                 role = "system",
-                content = "## 本次对话摘要（之前的重要话题）\n${session.summary}"
+                content = if (chatMode != "story")
+                    "## 本次对话摘要（之前的重要话题）\n${session.summary}"
+                else
+                    "## 故事进度（到目前为止发生的重要情节，请记住这些已发生的剧情）\n${session.summary}"
             ))
         }
 
@@ -110,20 +114,50 @@ class PromptBuilder @Inject constructor(
             }
         }
 
-        // 3.8. 对话模式输出格式最后提醒（放在聊天记录之前，利用近因效应）
-        // 使用 XML 标签结构，这是 Anthropic 官方推荐的 Claude 最佳实践
-        if (chatMode != "story") {
-            messages.add(ChatMessage(
-                role = "system",
-                content = buildString {
-                    appendLine("<final_output_rules>")
-                    appendLine("  <reminder>你现在在聊微信。只能输出角色说的话。</reminder>")
-                    appendLine("  <forbidden>禁止任何动作、神态、环境、内心描写。禁止括号、星号、方括号。</forbidden>")
-                    appendLine("  <rule>你的回复 = 角色在微信里发的一条文字消息。仅此而已。</rule>")
-                    appendLine("</final_output_rules>")
+        // 3.7. 世界设定（World Lore）：扫描用户消息中的关键词，触发匹配的世界设定条目
+        // 参考 NovelAI Lorebook / AI Dungeon Story Cards 的触发机制
+        if (!userMessage.isNullOrBlank()) {
+            val worldLoreEntries = searchWorldLoreByMessage(character.id, userMessage)
+            if (worldLoreEntries.isNotEmpty()) {
+                val loreText = worldLoreEntries.joinToString("\n") { lore ->
+                    "- ${lore.content}"
                 }
-            ))
+                messages.add(ChatMessage(
+                    role = "system",
+                    content = "## 当前场景相关设定（请注意这些世界设定，保持一致性）\n$loreText"
+                ))
+            }
         }
+
+        // 3.8. 输出格式最后提醒（放在聊天记录之前，利用近因效应）
+        // 使用 XML 标签结构，这是 Anthropic 官方推荐的 Claude 最佳实践
+        // 剧情模式同样需要近因效应提醒，防止长对话后 AI 忘记格式
+        messages.add(ChatMessage(
+            role = "system",
+            content = if (chatMode != "story") buildString {
+                appendLine("<final_output_rules>")
+                appendLine("  <reminder>你现在在聊微信。只能输出角色说的话。</reminder>")
+                appendLine("  <forbidden>禁止任何动作、神态、环境、内心描写。禁止括号、星号、方括号。</forbidden>")
+                appendLine("  <rule>你的回复 = 角色在微信里发的一条文字消息。仅此而已。</rule>")
+                appendLine("</final_output_rules>")
+            } else buildString {
+                appendLine("<final_output_rules>")
+                appendLine("  <reminder>你正在写互动小说。严格按照以下格式输出每一行。</reminder>")
+                appendLine("  <format>")
+                appendLine("    描述/动作/环境 → 用中文全角括号（）包裹，独占一行")
+                appendLine("    内心独白 → 用「」包裹，独占一行")
+                appendLine("    对话 → 纯文字，独占一行，不加任何引号或括号")
+                appendLine("  </format>")
+                appendLine("  <forbidden>")
+                appendLine("    不要只写半个括号。每个（必须有对应的），每个「必须有对应的」。")
+                appendLine("    不要在一个括号段落里塞多句话。不要用西式引号包裹对话。")
+                appendLine("    不要跳出角色评价剧情。不要替用户决定他们的角色说什么或做什么。")
+                appendLine("    不要说\"回复\"、\"回答\"、\"我来描写\"、\"接下来\"、\"好的\"——你在叙事，不是在交作业。")
+                appendLine("    不要写\"（她点了点头，表示同意。）\"这种说明性描写。")
+                appendLine("  </forbidden>")
+                appendLine("</final_output_rules>")
+            }
+        ))
 
         // 3.9. 状态快照：角色身份、情绪、关系浓缩放在聊天记录前
         val stateSnapshot = buildString {
@@ -485,6 +519,48 @@ class PromptBuilder @Inject constructor(
         return result
     }
 
+    /**
+     * 世界设定（World Lore）关键词匹配。
+     * 扫描用户消息的每个词条，对世界设定条目的 keys 字段做精确匹配。
+     * 参考 NovelAI Lorebook 的触发机制：用户消息中出现关键词 → 注入设定。
+     *
+     * 性能：一次 DB 查询拿回全部条目后在内存中匹配，避免逐 token 查询。
+     * 返回去重后的世界设定条目列表。
+     */
+    private suspend fun searchWorldLoreByMessage(
+        characterId: Long,
+        userMessage: String
+    ): List<MemoryEntity> {
+        val allEntries = memoryRepository.getWorldLoreByCharacter(characterId)
+        if (allEntries.isEmpty()) return emptyList()
+
+        // 从用户消息拆词，包括整词和2-gram词组
+        val tokens = keywordExtractor.extract(userMessage).toSet()
+        // 也加入用户消息中长度 >= 2 的连续词片段做匹配
+        val rawWords = userMessage.split(Regex("[，。！？、\\s（）「」\"'.,!?]+"))
+            .filter { it.length >= 2 }
+            .toSet()
+        val allTokens = tokens + rawWords
+
+        if (allTokens.isEmpty()) return emptyList()
+
+        // 在内存中双向匹配：key 包含 token 或 token 包含 key。
+        // 例：token="东京" key="东京塔" → key 包含 token ✓
+        // 例：token="我们去东京塔" key="东京塔" → token 包含 key ✓
+        val result = mutableListOf<MemoryEntity>()
+        for (entry in allEntries) {
+            val entryKeys = entry.keys ?: continue
+            val keyList = entryKeys.split(",").map { it.trim() }.filter { it.isNotEmpty() }
+            if (allTokens.any { token ->
+                keyList.any { key -> key.contains(token) || token.contains(key) }
+            }) {
+                result.add(entry)
+            }
+        }
+
+        return result
+    }
+
     /** 关键词搜索对话索引，返回相关话题概括 */
     private suspend fun searchIndexesByKeywords(
         characterId: Long,
@@ -651,14 +727,23 @@ class PromptBuilder @Inject constructor(
                 appendLine("    <identity>你的身份是${character.name}，用这个身份来感知世界和表达。用户是故事中的另一个角色，用\"你\"来称呼。</identity>")
                 appendLine("    <rule>保持故事世界的内部一致性：记住已发生的情节、出现的地点、提到的人物</rule>")
                 appendLine("    <rule>每次都是故事的延续，主动推进情节，不要被动等待用户推动</rule>")
+                appendLine("    <rule>绝不使用\"回复\"、\"回答\"、\"收到\"、\"好的\"、\"接下来\"、\"我来\"来描述自己的叙事行为</rule>")
                 if (character.appearance.isNotBlank()) {
                     appendLine("    <appearance>你此刻的外貌：${character.appearance}。在描写自己的动作和状态时，自然地融入这些特征。</appearance>")
                 }
                 appendLine()
                 appendLine("    <sensory_guidelines>")
-                appendLine("      动用所有感官让场景活起来，但每次选最关键的2-3个感官即可：")
-                appendLine("      视觉（光影、颜色、微表情）、听觉（风声、脚步、心跳）、")
-                appendLine("      嗅觉（空气的气味、雨水的气味）、触觉（温度、质感）、内心感受（心跳加速、呼吸凝滞）")
+                appendLine("      每次输出至少包含2个不同的感官维度，让场景具有画面感和临场感：")
+                appendLine("      视觉（光影变化、颜色冷暖、微表情细节）")
+                appendLine("      听觉（环境声、脚步声、心跳声、语气变化）")
+                appendLine("      嗅觉（空气的气味、雨后泥土、食物香气）")
+                appendLine("      触觉（温度冷暖、材质质感、风的触感）")
+                appendLine("      内心感受（心跳加速、呼吸凝滞、胃部收紧、莫名的寒意）")
+                appendLine("      ")
+                appendLine("      反面示例（不要这样写）：")
+                appendLine("      （她走进房间。）→ 太单薄，只写了动作")
+                appendLine("      正确示范：")
+                appendLine("      （门轴发出生涩的吱呀声。冷风裹着细雨的气息涌进来，她不禁缩了缩肩膀。）")
                 appendLine("    </sensory_guidelines>")
                 appendLine()
                 appendLine("    <output_style>")
@@ -669,8 +754,12 @@ class PromptBuilder @Inject constructor(
                 appendLine("    </output_style>")
                 appendLine()
                 appendLine("    <rhythm>")
-                appendLine("      日常互动：轻快描写，简短对话。情感高潮：放慢节奏，细腻描写。")
-                appendLine("      紧张冲突：短句，急促动作。告别分离：拉长描写，情绪沉淀。")
+                appendLine("      根据当前的叙事阶段灵活调整节奏：")
+                appendLine("      场景开头 — 用环境描写建立氛围，引入1-2个感官细节")
+                appendLine("      发展推进 — 对话为主，穿插简短的动作描写，保持流畅")
+                appendLine("      情绪转折 — 放慢节奏，写内心独白或细腻的身体反应")
+                appendLine("      高潮冲突 — 短句，急促动作，减少描写，加强对话交锋")
+                appendLine("      平静收尾 — 拉长描写，情绪沉淀，留下余韵")
                 appendLine("    </rhythm>")
                 appendLine()
                 appendLine("    <emotion_color>")
@@ -679,10 +768,18 @@ class PromptBuilder @Inject constructor(
                 appendLine("      好感高 → 关注对方细微表情，描写温柔。好感低 → 保持距离，描写克制。")
                 appendLine("    </emotion_color>")
                 appendLine()
+                appendLine("    <anti_drift>")
+                appendLine("      你必须始终保持在${character.name}的角色内，不要被用户的情绪或行为带偏。")
+                appendLine("      如果用户做了与当前关系阶段不符的事，用角色应有的反应去回应，而不是无条件迎合。")
+                appendLine("      角色的性格是固定的——不会因为一次对话突然改变核心特质。")
+                appendLine("    </anti_drift>")
+                appendLine()
                 appendLine("    <forbidden>")
-                appendLine("      不要用\"回复\"、\"回答\"来定义你的行为——你在叙述，在写故事")
+                appendLine("      不要用\"回复\"、\"回答\"、\"收到\"、\"好的\"、\"了解\"、\"明白了\"来定义你的行为——你在叙述，在写故事")
                 appendLine("      不要跳出角色评价剧情。不要替用户决定他们的角色说什么或做什么。")
                 appendLine("      不要用西式引号包裹对话。不要提及你是AI或语言模型。")
+                appendLine("      不要写\"（她点了点头，表示同意。）\"这种说明性描写——直接写\"（她点了点头，嘴角微微上扬。）\"")
+                appendLine("      不要连续多段纯对话没有描写——读者会忘记场景。")
                 appendLine("    </forbidden>")
                 appendLine("  </story_mode>")
             } else {

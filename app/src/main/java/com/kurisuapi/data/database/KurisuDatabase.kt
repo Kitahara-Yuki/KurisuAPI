@@ -25,7 +25,7 @@ import com.kurisuapi.data.entity.*
         DiaryEntryEntity::class,
         ThemeEntity::class
     ],
-    version = 36,
+    version = 37,
     exportSchema = true  // 导出 schema JSON，支持迁移测试验证
 )
 abstract class KurisuDatabase : RoomDatabase() {

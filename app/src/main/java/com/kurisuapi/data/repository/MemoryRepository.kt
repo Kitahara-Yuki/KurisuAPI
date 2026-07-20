@@ -108,4 +108,18 @@ class MemoryRepository @Inject constructor(
     /** 查询缺少嵌入向量的记忆 */
     suspend fun getWithoutEmbeddings(characterId: Long, limit: Int = 50): List<MemoryEntity> =
         memoryDao.getWithoutEmbeddings(characterId, limit)
+
+    // ═══════════════════════════════════════════
+    // 世界设定（World Lore）
+    // ═══════════════════════════════════════════
+
+    /** 获取角色的所有世界设定条目 */
+    suspend fun getWorldLoreByCharacter(characterId: Long): List<MemoryEntity> =
+        memoryDao.getWorldLoreByCharacter(characterId)
+
+    /** 通过关键词搜索世界设定（keys 字段 LIKE 匹配，精确关键词触发） */
+    suspend fun searchWorldLoreByKeyword(characterId: Long, keyword: String): List<MemoryEntity> {
+        val escaped = keyword.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+        return memoryDao.searchWorldLoreByKeyword(characterId, escaped)
+    }
 }

@@ -27,6 +27,7 @@ data class MemoryEntity(
     val embedding: ByteArray? = null,  // 语义搜索向量（Float32 数组的原始字节）
     val recallCount: Int = 0,  // 被检索到的次数（衰减计算）
     val lastRecalledAt: Long = 0,  // 最后被检索的时间戳
+    val keys: String? = null,  // world_lore 触发关键词（逗号分隔），非 world_lore 条目为 null
     val createdAt: Long = System.currentTimeMillis(),
     val updatedAt: Long = System.currentTimeMillis()
 ) {
@@ -50,6 +51,7 @@ data class MemoryEntity(
         } else if (embedding != null || other.embedding != null) return false
         if (recallCount != other.recallCount) return false
         if (lastRecalledAt != other.lastRecalledAt) return false
+        if (keys != other.keys) return false
         if (createdAt != other.createdAt) return false
         if (updatedAt != other.updatedAt) return false
         return true
@@ -67,6 +69,7 @@ data class MemoryEntity(
         result = 31 * result + (embedding?.contentHashCode() ?: 0)
         result = 31 * result + recallCount.hashCode()
         result = 31 * result + lastRecalledAt.hashCode()
+        result = 31 * result + (keys?.hashCode() ?: 0)
         result = 31 * result + createdAt.hashCode()
         result = 31 * result + updatedAt.hashCode()
         return result

@@ -115,4 +115,16 @@ interface MemoryDao {
     /** 查询缺少嵌入向量的记忆（最多 limit 条，用于逐批预计算） */
     @Query("SELECT * FROM memories WHERE characterId = :characterId AND isDeleted = 0 AND embedding IS NULL ORDER BY importance DESC LIMIT :limit")
     suspend fun getWithoutEmbeddings(characterId: Long, limit: Int = 50): List<MemoryEntity>
+
+    // ═══════════════════════════════════════════
+    // 世界设定（World Lore）
+    // ═══════════════════════════════════════════
+
+    /** 获取角色的所有世界设定条目 */
+    @Query("SELECT * FROM memories WHERE characterId = :characterId AND isDeleted = 0 AND keys IS NOT NULL AND keys != '' ORDER BY importance DESC")
+    suspend fun getWorldLoreByCharacter(characterId: Long): List<MemoryEntity>
+
+    /** 通过关键词搜索世界设定条目（keys 字段 LIKE 匹配） */
+    @Query("SELECT * FROM memories WHERE characterId = :characterId AND isDeleted = 0 AND keys IS NOT NULL AND keys != '' AND keys LIKE '%' || :keyword || '%' ESCAPE '\\' ORDER BY importance DESC")
+    suspend fun searchWorldLoreByKeyword(characterId: Long, keyword: String): List<MemoryEntity>
 }

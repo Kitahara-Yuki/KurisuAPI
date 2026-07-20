@@ -189,10 +189,16 @@ fun ChatLogScreen(
                 }
 
                 // 打字机运行时隐藏最后一条 AI 消息（正在被逐字动画显示，避免重复）
-                val lastAiMsg = messages.lastOrNull()?.takeIf { it.sender == "ai" }
-                val typewriterCaughtUp = lastAiMsg != null &&
-                    typewriterText.isNotBlank() &&
-                    typewriterText == lastAiMsg.content
+                // 注意：caughtUp 必须在 derivedStateOf 内部计算，不能从外部捕获普通变量，
+                // 否则闭包捕获的是首次组合时的过期值，导致消息错误地被 dropLast 掉。
+                val typewriterCaughtUp by remember {
+                    derivedStateOf {
+                        val lastAiMsg = messages.lastOrNull()?.takeIf { it.sender == "ai" }
+                        lastAiMsg != null &&
+                            typewriterText.isNotBlank() &&
+                            typewriterText == lastAiMsg.content
+                    }
+                }
 
                 val displayMessages by remember {
                     derivedStateOf {

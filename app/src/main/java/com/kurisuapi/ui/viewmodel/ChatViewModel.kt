@@ -270,6 +270,12 @@ class ChatViewModel @Inject constructor(
                     )
                 )
 
+                // 立即清掉上一轮残留的 typewriterText，避免 UI 层看到旧文字导致：
+                // 1. LaunchedEffect 不滚动到新消息（条件 typewriterText.isBlank() 为 false）
+                // 2. 流式气泡显示旧 AI 回复残留文字
+                typewriterCleanupJob?.cancel()
+                typewriter.reset()
+
                 // 更新会话时间
                 val cur = sessionRepository.getById(sessionId) ?: run {
                     _error.value = "会话已不存在"; _isLoading.value = false; timerJob.cancel()
@@ -314,8 +320,6 @@ class ChatViewModel @Inject constructor(
                 )
 
                 // 6. 调用 AI API（思考模式 120s，普通模式 30s）
-                typewriterCleanupJob?.cancel()
-                typewriter.reset() // 清空上一轮残留的 typewriterText
                 _isStreaming.value = true
                 _streamingText.value = ""
                 typewriter.start { _streamingText.value }
